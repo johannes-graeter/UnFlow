@@ -146,6 +146,9 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             im2_s = downsample(im2_s, 2)
             mask_s = downsample(mask_s, 2)
 
+    # Add loss from epipolar geometry
+
+
     regularization_loss = tf.losses.get_regularization_loss()
     final_loss = combined_loss + regularization_loss
 
