@@ -2,6 +2,10 @@ import tensorflow as tf
 from tensorflow.python.ops import math_ops
 
 
+def to_intrinsics(f, cu, cv):
+    return tf.constant([[f, 0., cu], [0., f, cv], [0., 0., 1.]])
+
+
 def repeat(mat, num):
     return tf.stack([mat for i in range(num)])
 
@@ -141,11 +145,21 @@ def epipolar_errors(predict_fundamental_matrix, flow):
     return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
     input:
-    - Prediction of fundamental matrix in not in form (f_11,f_12,f_13,f_21,f_22,f_23,f_31,f_32,f_33)
+    - Prediction of fundamental matrix in form (f_11,f_12,f_13,f_21,f_22,f_23,f_31,f_32,f_33)
     - Estimated flow image (shape=(num_batches, height, width, 2))
     """
+
+    batch_size, height, width = predict_fundamental_matrix.shape.as_list()
     # Translate in matrix hartley style (A*f=err), so I don't have to reshape and save 1 multiplication.
     A = reform_hartley(flow)
+
+    if not (height == 9 and width == 1):
+        raise Exception("Wrong in put dimensions height={} width={}".format(height, width))
+
+    # predict_fundamental_matrix = predict_fundamental_matrix_in
+    # elif height == 3 and width == 3:
+    #     predict_fundamental_matrix = tf.reshape(predict_fundamental_matrix_in, (batch_size, 9, 1))
+    # else:
     error_vec = math_ops.matmul(A, predict_fundamental_matrix)  # check dimensions.
     return error_vec
 

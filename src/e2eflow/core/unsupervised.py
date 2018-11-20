@@ -9,7 +9,8 @@ from .losses import compute_losses, create_border_mask
 from ..ops import downsample
 from .image_warp import image_warp
 from .flownet import flownet, FLOW_SCALE
-
+from .funnet import funnet, funnet_loss
+from .util import to_intrinsics
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -41,13 +42,13 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             [im1, im2, border_mask],
             horizontal_flipping=True,
             min_scale=0.9, max_scale=1.1
-            )
+        )
 
         # augment locally
         im2_geo, border_mask_local = random_affine(
             [im2_geo, border_mask],
             min_scale=0.9, max_scale=1.1
-            )
+        )
         border_mask = border_mask_local * border_mask_global
 
         im1_photo, im2_photo = random_photometric(
@@ -147,8 +148,11 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             mask_s = downsample(mask_s, 2)
 
     # Add loss from epipolar geometry
+    motion_angles = funnet(final_flow_fw)
+    intrin = to_intrinsics(params.get('focal_length'), params.get('cu'), params.get('cv'))
+    fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
 
-
+    combined_loss += params.get('epipolar_loss_weight') * fun_loss
     regularization_loss = tf.losses.get_regularization_loss()
     final_loss = combined_loss + regularization_loss
 

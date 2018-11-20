@@ -71,13 +71,19 @@ class TestEpipolarError(unittest.TestCase):
 
         F = get_fundamental_matrix(rotation, translation, self.intrin)
         # f must have shape (num_batches, 9, 1)
-        f = tf.expand_dims(tf.convert_to_tensor(F.reshape(1, 9), np.float32), axis=2)
+        f0 = tf.expand_dims(tf.convert_to_tensor(F.reshape(1, 9), np.float32), axis=2)
 
-        errs = epipolar_errors(f, flow_tf)
+        errs0 = epipolar_errors(f0, flow_tf)
+
+        f1 = tf.expand_dims(tf.convert_to_tensor(F, np.float32), axis=0)
+        errs1 = epipolar_errors(f1, flow_tf)
 
         with tf.Session() as sess:
-            a = tf.reduce_sum(errs).eval()
+            a = tf.reduce_sum(errs0).eval()
+            b = tf.reduce_sum(tf.squared_difference(errs0, errs1)).eval()
+
         self.assertLess(a, 1e-8)
+        self.assertLess(b, 1e-8)
 
     def test_fundamental_matrix(self):
         r_p_y_ty_tp = np.array([0, 0, 5. / 180. * np.pi, 10. / 180. * np.pi, 0.])
@@ -99,11 +105,8 @@ class TestEpipolarError(unittest.TestCase):
         f2 = get_fun_tf(tf.stack([angles_tf, 0. * angles_tf]), tf.convert_to_tensor(self.intrin, np.float32))
 
         with tf.Session() as sess:
-            a = tf.reduce_sum(f1 - f2[0, :, :]).eval()
-            print("Results")
-            print(f1.eval())
-            print(f2[0, :, :].eval())
-            print(a)
+            a = tf.reduce_sum(tf.squared_difference(f1, f2[0, :, :])).eval()
+
         self.assertLess(a, 1e-7)
 
 

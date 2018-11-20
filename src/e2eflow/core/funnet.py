@@ -6,6 +6,7 @@ from tensorflow.python.ops import nn
 from .util import pad
 from .util import epipolar_errors
 from .util import get_fundamental_matrix
+from .util import get_rotation
 
 slim = tf.contrib.slim
 
@@ -69,7 +70,7 @@ def funnet_loss(flow, motion_angle_prediction, intrinsics):
     # Weight loss in function of flow amplitude.
     # For small flow, fundamental error is always small (norm(F) goes to zero for translation going to zero)
     # Calculate squared norm of flow
-    weight = math_ops.reduce_sum(tf.multiply(flow, flow))
+    weight = math_ops.reduce_mean(tf.multiply(flow, flow))
 
     batch_size, height, width, two = flow.shape.as_list()
     assert (two == 2)
