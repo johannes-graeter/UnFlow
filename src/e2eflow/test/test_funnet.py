@@ -75,15 +75,10 @@ class TestEpipolarError(unittest.TestCase):
 
         errs0 = epipolar_errors(f0, flow_tf)
 
-        f1 = tf.expand_dims(tf.convert_to_tensor(F, np.float32), axis=0)
-        errs1 = epipolar_errors(f1, flow_tf)
-
         with tf.Session() as sess:
             a = tf.reduce_sum(errs0).eval()
-            b = tf.reduce_sum(tf.squared_difference(errs0, errs1)).eval()
 
         self.assertLess(a, 1e-8)
-        self.assertLess(b, 1e-8)
 
     def test_fundamental_matrix(self):
         r_p_y_ty_tp = np.array([0, 0, 5. / 180. * np.pi, 10. / 180. * np.pi, 0.])
