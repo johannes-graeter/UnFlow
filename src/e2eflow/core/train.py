@@ -185,6 +185,7 @@ class Trainer():
         return train_op, loss_
 
     def train(self, start_iter, max_iter, iter_offset):
+        print('-- training from iteration {} to {} with offset {}'.format(start_iter, max_iter, iter_offset))
         ckpt = tf.train.get_checkpoint_state(self.ckpt_dir)
 
         with tf.Graph().as_default(), tf.device(self.shared_device):
@@ -244,16 +245,23 @@ class Trainer():
                             learning_rate = self.params['learning_rate']
 
                     feed_dict = {learning_rate_: learning_rate, global_step_: i}
-                    _, loss = sess.run(
-                        [train_op, loss_],
-                        feed_dict=feed_dict,
-                        options=run_options,
-                        run_metadata=run_metadata)
+                    try:
+                        _, loss = sess.run(
+                            [train_op, loss_],
+                            feed_dict=feed_dict,
+                            options=run_options,
+                            run_metadata=run_metadata)
 
-                    if i == 1 or i % self.params['display_interval'] == 0:
-                        summary = sess.run(summary_, feed_dict=feed_dict)
-                        summary_writer.add_summary(summary, i)
-                        print("-- train: i = {}, loss = {}".format(i, loss))
+                        if i == 1 or i % self.params['display_interval'] == 0:
+                            summary = sess.run(summary_, feed_dict=feed_dict)
+                            summary_writer.add_summary(summary, i)
+                            print("-- train: i = {}, loss = {}".format(i, loss))
+
+                    except tf.errors.OutOfRangeError:
+                        print("tf.errors.OutOfRangeError was thrown in sess.run() at iteration {}. "
+                              "Probably end of queue! "
+                              "Close current session and continue with next set of iterations".format(i))
+                        break
 
                 save_path =  os.path.join(self.ckpt_dir, 'model.ckpt')
                 saver.save(sess, save_path, global_step=max_iter)
