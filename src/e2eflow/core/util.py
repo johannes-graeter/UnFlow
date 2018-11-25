@@ -1,11 +1,20 @@
 import tensorflow as tf
 
+
 def to_intrinsics(f, cu, cv):
     return tf.constant([[f, 0., cu], [0., f, cv], [0., 0., 1.]])
 
 
-def repeat(mat, num):
-    return tf.stack([mat for i in range(num)])
+def repeat(mat, num, axis=0):
+    return tf.stack([mat for i in range(num)], axis=axis)
+
+
+def repeat2(mat, num, axis=0):
+    """repeat a row with broadcasting is that faster than tf.stack?"""
+    num_dims = len(mat.shape.as_list())
+    shape = [1 for i in range(num_dims)]
+    shape[axis] = num
+    return tf.ones(shape) * mat
 
 
 def get_rotation(angle, axis=0):
@@ -169,7 +178,7 @@ def get_image_coordinates_u(shape):
     # create matrix with column numbers in each row
     u = [[[i for i in range(width)] for j in range(height)] for bs in range(batch_size)]
 
-    return tf.constant(u)
+    return tf.constant(u, dtype=tf.float32)
 
 
 def get_image_coordinates_v(shape):
@@ -177,7 +186,7 @@ def get_image_coordinates_v(shape):
     # create matrix with column numbers in each row
     v = [[[j for i in range(width)] for j in range(height)] for bs in range(batch_size)]
 
-    return tf.constant(v)
+    return tf.constant(v, dtype=tf.float32)
 
 
 def get_image_coordinates_as_points(shape):
@@ -217,18 +226,28 @@ def epipolar_errors(predict_fundamental_matrix_in, flow):
     else:
         raise Exception("Invalid number of dimensions.")
 
-    # Get image point coordinates as flow vector in homogenous coordinates.
-    old_points = get_image_coordinates_as_points((batch_size, width, height))
+    # Expand for multiplication
+    pred_fun = tf.expand_dims(pred_fun, axis=1)
 
-    # Add calculated flow to images coordinates to get new flow.
     flow_bs, flow_h, flow_w, two = flow.shape.as_list()
     assert (two == 2)
+    assert (flow_bs == batch_size)
+
+    # Get image point coordinates as flow vector in homogenous coordinates.
+    old_points = get_image_coordinates_as_points((batch_size, flow_h, flow_w))
+
+    # Add calculated flow to images coordinates to get new flow.
     flow_vec = tf.reshape(flow, (batch_size, flow_h * flow_w, two))
-    flow_vec = tf.stack((flow_vec, tf.ones((batch_size, flow_h * flow_w, 1)), flow_vec.dtype), axis=2)
+    flow_vec = tf.concat((flow_vec, tf.ones((batch_size, flow_h * flow_w, 1), )), axis=2)
     new_points = old_points + flow_vec
 
+    # Expand for multiplication
+    old_points = tf.expand_dims(old_points, axis=3)
+    new_points = tf.expand_dims(new_points, axis=3)
+
     # Calculate epipolar error.
-    error_vec = tf.matmul(new_points, tf.matmul(pred_fun, old_points))
+    error_vec = tf.matmul(new_points, tf.matmul(repeat2(pred_fun, old_points.shape.as_list()[1], axis=1), old_points),
+                          transpose_a=True)
     return error_vec
 
 
