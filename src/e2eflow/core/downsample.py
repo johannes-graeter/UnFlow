@@ -1,3 +1,4 @@
+import tensorflow as tf
 from ..ops import downsample as downsample_ops
 
 def downsample(tensor, num):
