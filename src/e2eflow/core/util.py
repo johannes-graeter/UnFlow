@@ -217,14 +217,14 @@ def epipolar_errors(predict_fundamental_matrix_in, flow):
     else:
         raise Exception("Invalid number of dimensions.")
 
-    # get image point coordinates as flow vector in homogenous coordinates
+    # Get image point coordinates as flow vector in homogenous coordinates.
     old_points = get_image_coordinates_as_points((batch_size, width, height))
 
-    # add calculated flow to images coordinates to get new flow
+    # Add calculated flow to images coordinates to get new flow.
     flow_bs, flow_h, flow_w, two = flow.shape.as_list()
     assert (two == 2)
     flow_vec = tf.reshape(flow, (batch_size, flow_h * flow_w, two))
-    flow_vec = tf.stack((flow_vec, tf.ones(batch_size, flow_h * flow_w, 1)), axis=2)
+    flow_vec = tf.stack((flow_vec, tf.ones((batch_size, flow_h * flow_w, 1)), flow_vec.dtype), axis=2)
     new_points = old_points + flow_vec
 
     # Calculate epipolar error.
