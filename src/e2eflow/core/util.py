@@ -143,7 +143,66 @@ def reform_hartley(flow):
     return A
 
 
-def epipolar_errors(predict_fundamental_matrix, flow):
+# def epipolar_errors(predict_fundamental_matrix, flow):
+#     """
+#     return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
+#     fundamental matrix prediction with shape (num_batches, 9, 1).
+#     input:
+#     - Prediction of fundamental matrix in form (f_11,f_12,f_13,f_21,f_22,f_23,f_31,f_32,f_33)
+#     - Estimated flow image (shape=(num_batches, height, width, 2))
+#     """
+#
+#     batch_size, height, width = predict_fundamental_matrix.shape.as_list()
+#     # Translate in matrix hartley style (A*f=err), so I don't have to reshape and save 1 multiplication.
+#     print("before reform")
+#     A = reform_hartley(flow)
+#     print("after reform")
+#     if not (height == 9 and width == 1):
+#         raise Exception("Wrong in put dimensions height={} width={}".format(height, width))
+#
+#     # predict_fundamental_matrix = predict_fundamental_matrix_in
+#     # elif height == 3 and width == 3:
+#     #     predict_fundamental_matrix = tf.reshape(predict_fundamental_matrix_in, (batch_size, 9, 1))
+#     # else:
+#     error_vec = tf.matmul(A, predict_fundamental_matrix)  # check dimensions.
+#     return error_vec
+
+def get_image_coordinates_u(shape):
+    batch_size, height, width = shape
+    # create matrix with column numbers in each row
+    u = [[[i for i in range(width)] for j in range(height)] for bs in range(batch_size)]
+
+    return tf.constant(u)
+
+
+def get_image_coordinates_v(shape):
+    batch_size, height, width = shape
+    # create matrix with column numbers in each row
+    v = [[[j for i in range(width)] for j in range(height)] for bs in range(batch_size)]
+
+    return tf.constant(v)
+
+
+def get_image_coordinates_as_points(shape):
+    """
+    Get image point coordinates as flow vector in homogenous coordinates.
+    Used for fundamental matrix evaluation from dense flow.
+    :param shape: (batch_size, flow_height, flow_width)
+    :return: pixel coordinates in homogenous coordinates as tensor of shape (batch_size, flow_height*flow_width, 3)
+    """
+
+    u = get_image_coordinates_u(shape)
+    u = tf.expand_dims(u, axis=3)
+    v = get_image_coordinates_v(shape)
+    v = tf.expand_dims(v, axis=3)
+
+    uv1 = tf.stack((u, v, tf.ones_like(u)), axis=3)
+    uv1_vec = tf.reshape(uv1, (shape[0], shape[1] * shape[2], 3))
+
+    return uv1_vec
+
+
+def epipolar_errors(predict_fundamental_matrix_in, flow):
     """
     return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
@@ -152,19 +211,27 @@ def epipolar_errors(predict_fundamental_matrix, flow):
     - Estimated flow image (shape=(num_batches, height, width, 2))
     """
 
-    batch_size, height, width = predict_fundamental_matrix.shape.as_list()
-    # Translate in matrix hartley style (A*f=err), so I don't have to reshape and save 1 multiplication.
-    print("before reform")
-    A = reform_hartley(flow)
-    print("after reform")
-    if not (height == 9 and width == 1):
-        raise Exception("Wrong in put dimensions height={} width={}".format(height, width))
+    batch_size, height, width = predict_fundamental_matrix_in.shape.as_list()
 
-    # predict_fundamental_matrix = predict_fundamental_matrix_in
-    # elif height == 3 and width == 3:
-    #     predict_fundamental_matrix = tf.reshape(predict_fundamental_matrix_in, (batch_size, 9, 1))
-    # else:
-    error_vec = math_ops.matmul(A, predict_fundamental_matrix)  # check dimensions.
+    if height == 9 and width == 1:
+        pred_fun = tf.reshape(predict_fundamental_matrix_in, (batch_size, 3, 3))
+    elif height == 3 and width == 3:
+        pred_fun = predict_fundamental_matrix_in
+    else:
+        raise Exception("Invalid number of dimensions.")
+
+    # get image point coordinates as flow vector in homogenous coordinates
+    old_points = get_image_coordinates_as_points((batch_size, width, height))
+
+    # add calculated flow to images coordinates to get new flow
+    flow_bs, flow_h, flow_w, two = flow.shape.as_list()
+    assert (two == 2)
+    flow_vec = tf.reshape(flow, (batch_size, flow_h * flow_w, two))
+    flow_vec = tf.stack((flow_vec, tf.ones(batch_size, flow_h * flow_w, 1)), axis=2)
+    new_points = old_points + flow_vec
+
+    # Calculate epipolar error.
+    error_vec = tf.matmul(new_points, tf.matmul(pred_fun, old_points))
     return error_vec
 
 
