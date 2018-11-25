@@ -10,7 +10,7 @@ from .image_warp import image_warp
 from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet, funnet_loss
 from .util import to_intrinsics
-from .util import downsample
+from .downsample import downsample
 from .visualization import get_flow_visualization
 
 # REGISTER ALL POSSIBLE LOSS TERMS
