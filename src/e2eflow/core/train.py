@@ -255,7 +255,7 @@ class Trainer():
                         summary_writer.add_summary(summary, i)
                         print("-- train: i = {}, loss = {}".format(i, loss))
 
-                save_path =  os.path.join(self.ckpt_dir, 'model.ckpt')
+                save_path = os.path.join(self.ckpt_dir, 'model.ckpt')
                 saver.save(sess, save_path, global_step=max_iter)
 
                 summary_writer.close()

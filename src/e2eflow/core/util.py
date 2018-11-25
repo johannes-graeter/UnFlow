@@ -1,5 +1,6 @@
 import tensorflow as tf
-from tensorflow.python.ops import math_ops
+
+from ..ops import downsample as downsample_ops
 
 
 def to_intrinsics(f, cu, cv):
@@ -56,7 +57,9 @@ def get_fundamental_matrix(angles, intrin):
     :param intrin: matrix with intrinsics as constant with shape (3,3)
     :return: fundamental matrices, shape (batch_size,3,3)
     """
-    batch_size, _ = angles.shape.as_list()
+    batch_size, five = angles.shape.as_list()
+
+    assert (five == 5)
     t = tf.constant([0., 0., 1.])
     # Hacky emulation of np.repeat
     t = repeat(t, batch_size)
@@ -120,8 +123,8 @@ def reform_hartley(flow):
     # sess = tf.Session()
 
     l = []
-    for _x in range(width):
-        for _y in range(height):
+    for _x in range(10, width, int(width / 100)):
+        for _y in range(10, height, int(height / 100)):
             dx = flow[:, _y, _x, 0]
             # with sess.as_default():
             #    print(dx.eval())
@@ -151,8 +154,9 @@ def epipolar_errors(predict_fundamental_matrix, flow):
 
     batch_size, height, width = predict_fundamental_matrix.shape.as_list()
     # Translate in matrix hartley style (A*f=err), so I don't have to reshape and save 1 multiplication.
+    print("before reform")
     A = reform_hartley(flow)
-
+    print("after reform")
     if not (height == 9 and width == 1):
         raise Exception("Wrong in put dimensions height={} width={}".format(height, width))
 
@@ -179,3 +183,11 @@ def resize_area(tensor, like):
 def resize_bilinear(tensor, like):
     _, h, w, _ = tf.unstack(tf.shape(like))
     return tf.stop_gradient(tf.image.resize_bilinear(tensor, [h, w]))
+
+
+def downsample(tensor, num):
+    _, height, width, _ = tensor.shape.as_list()
+    if height % 2 == 0 and width % 2 == 0:
+        return downsample_ops(tensor, num)
+    else:
+        return tf.image.resize_area(tensor, tf.constant([int(height / num), int(width / num)]))

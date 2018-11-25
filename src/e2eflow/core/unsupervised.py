@@ -6,11 +6,12 @@ from .augment import random_affine, random_photometric
 from .flow_util import flow_to_color
 from .util import resize_area, resize_bilinear
 from .losses import compute_losses, create_border_mask
-from ..ops import downsample
 from .image_warp import image_warp
 from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet, funnet_loss
 from .util import to_intrinsics
+from .util import downsample
+from .visualization import get_flow_visualization
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -36,6 +37,9 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
     # -------------------------------------------------------------------------
     # Data & mask augmentation
     border_mask = create_border_mask(im1, 0.1)
+
+    _track_image(im1, 'orig1')
+    _track_image(im2, 'orig2')
 
     if augment:
         im1_geo, im2_geo, border_mask_global = random_affine(
@@ -164,6 +168,8 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
         if params.get(weight_name):
             weight = tf.identity(params[weight_name], name='weight/' + loss)
             tf.add_to_collection('params', weight)
+
+    _track_image(get_flow_visualization(final_flow_fw), 'estimated_flow')
 
     if not return_flow:
         return final_loss

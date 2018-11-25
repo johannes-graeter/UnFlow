@@ -1,12 +1,11 @@
 import tensorflow as tf
-from tensorflow.python.ops import math_ops
 import tensorflow.contrib.layers as layers
+from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn
 
-from .util import pad
 from .util import epipolar_errors
 from .util import get_fundamental_matrix
-from .util import get_rotation
+from .util import pad
 
 slim = tf.contrib.slim
 
@@ -56,6 +55,8 @@ def funnet(flow, trainable=False):
 
             conv6_2 = slim.conv2d(pad(conv6_1), 1, 3,
                                   scope='conv6_2')
+            conv6_2 = tf.squeeze(conv6_2, [1, 3])  # should have shape (batch_size,26)
+
             # Predict roll, pitch, yaw, translation_yaw, translation_pitch
             # activation from (-1,1), multiply with pi to get angles ranging from -pi to pi
             motion_angles = slim.fully_connected(conv6_2, 5, scope='predict_fun',
@@ -66,21 +67,24 @@ def funnet(flow, trainable=False):
             return motion_angles
 
 
-def funnet_loss(flow, motion_angle_prediction, intrinsics):
+def funnet_loss(motion_angle_prediction, flow, intrinsics):
     # Weight loss in function of flow amplitude.
     # For small flow, fundamental error is always small (norm(F) goes to zero for translation going to zero)
     # Calculate squared norm of flow
     weight = math_ops.reduce_mean(tf.multiply(flow, flow))
 
-    batch_size, height, width, two = flow.shape.as_list()
-    assert (two == 2)
+    # Several flow layers are outputted at different resolution.
+    # First two are always du and dv at highest res.
+    batch_size, height, width, num_flows = flow.shape.as_list()
 
     # flow_thres = 3.
     # if weight > flow_thres:
 
     # Epipolar error of flow
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
+    print("get epipolar error")
     loss = math_ops.reduce_mean(epipolar_errors(tf.reshape(predict_fun, (batch_size, 9, 1)), flow))
+    print("done epipolar error")
     # Weight loss
     loss = tf.scalar_mul(weight, loss)
     tf.losses.add_loss(loss)
