@@ -68,7 +68,7 @@ def get_fundamental_matrix(angles, intrin):
     assert (five == 5)
     t = tf.constant([0., 0., 1.])
     # Hacky emulation of np.repeat
-    t = repeat(t, batch_size)
+    t = repeat2(t, batch_size)
     t = tf.expand_dims(t, axis=2)
     # Now t should have shape(batch_size,3,1)
     # Apply yaw (camera coordinates!)

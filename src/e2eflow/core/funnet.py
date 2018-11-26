@@ -98,20 +98,15 @@ def funnet_loss(motion_angle_prediction, flow, intrinsics):
     # Weight loss in function of flow amplitude.
     # For small flow, fundamental error is always small (norm(F) goes to zero for translation going to zero)
     # Calculate squared norm of flow
-    flow2 = tf.multiply(flow, flow)
-    weight = tf.reduce_mean(tf.reduce_sum(flow2, axis=2))
-
+    # flow2 = tf.multiply(flow, flow)
+    # weight = tf.reduce_mean(tf.reduce_sum(flow2, axis=2))
+    weight = 1.
     # Several flow layers are outputted at different resolution.
     # First two are always du and dv at highest res.
-    batch_size, height, width, num_flows = flow.shape.as_list()
-
-    # flow_thres = 3.
-    # if weight > flow_thres:
-
     # Epipolar error of flow
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
     print("get epipolar error")
-    loss = math_ops.reduce_mean(tf.abs(epipolar_errors(tf.reshape(predict_fun, (batch_size, 9, 1)), flow)))
+    loss = math_ops.reduce_mean(tf.abs(epipolar_errors(predict_fun, flow)))
     print("done epipolar error")
     # Weight loss
     loss = tf.scalar_mul(weight, loss)
