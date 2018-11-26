@@ -207,7 +207,9 @@ class Trainer():
                 if self.debug:
                     summary_writer = tf.summary.FileWriter(self.train_summaries_dir,
                                                             sess.graph)
-                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE,
+                                                report_tensor_allocations_upon_oom=True)
+                    #run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
                     run_metadata = tf.RunMetadata()
                 else:
                     summary_writer = tf.summary.FileWriter(self.train_summaries_dir)

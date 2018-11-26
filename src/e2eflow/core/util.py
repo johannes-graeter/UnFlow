@@ -208,7 +208,7 @@ def get_image_coordinates_as_points(shape):
     return uv1_vec
 
 
-def epipolar_errors(predict_fundamental_matrix_in, flow):
+def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
     """
     return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
@@ -241,9 +241,16 @@ def epipolar_errors(predict_fundamental_matrix_in, flow):
     flow_vec = tf.concat((flow_vec, tf.ones((batch_size, flow_h * flow_w, 1), )), axis=2)
     new_points = old_points + flow_vec
 
+    if bin_size > 0:
+        us = [i * bin_size for i in range(int(flow_h * flow_w / bin_size))]
+        old_points = tf.gather(old_points, us, axis=1)
+        new_points = tf.gather(new_points, us, axis=1)
+
     # Expand for multiplication
     old_points = tf.expand_dims(old_points, axis=3)
     new_points = tf.expand_dims(new_points, axis=3)
+
+    print(old_points.shape.as_list(), new_points.shape.as_list())
 
     # Calculate epipolar error.
     error_vec = tf.matmul(new_points, tf.matmul(repeat2(pred_fun, old_points.shape.as_list()[1], axis=1), old_points),
