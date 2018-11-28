@@ -1,8 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn
 
 from .alexnet import alexnet_v2, alexnet_v2_arg_scope
+from .util import add_to_summary
 from .util import epipolar_errors
 from .util import get_fundamental_matrix
 
@@ -82,16 +82,29 @@ def _leaky_relu(x):
 
 def funnet(flow, trainable=False):
     _, height, width, _ = flow.shape.as_list()
-    with slim.arg_scope(alexnet_v2_arg_scope()):
-        net, end_points = alexnet_v2(flow, num_classes=5, is_training=trainable, spatial_squeeze=True, global_pool=True)
 
-    motion_angles = slim.fully_connected(net, 5, scope='predict_fun',
-                                         activation_fn=nn.tanh)
+    with tf.variable_scope('funnet') as sc:
+        weight_decay = 0.0005
+        with slim.arg_scope(alexnet_v2_arg_scope(weight_decay)):
+            net, end_points = alexnet_v2(flow, num_classes=5, is_training=trainable, global_pool=False,
+                                         spatial_squeeze=False)
+            bs, height, width, channels = net.shape.as_list()
+            net = tf.reshape(net, (bs, height * width * channels))
+            add_to_summary('debug/alexnet/output', net)
+        # print(end_points)
 
-    pi = 3.14159265358979323846
-    motion_angles = tf.scalar_mul(pi, motion_angles)
+        with slim.arg_scope([slim.fully_connected],
+                            biases_initializer=tf.constant_initializer(0.1),
+                            weights_regularizer=slim.l2_regularizer(weight_decay),
+                            weights_initializer=tf.truncated_normal_initializer(0.0, 0.005),
+                            outputs_collections="motion_angles"):
+            motion_angles = slim.fully_connected(net, 5, activation_fn=tf.nn.tanh)
+            # add_to_summary('debug/funnet/output', net)
+            print(motion_angles)
+            pi = 3.14159265358979323846
+            motion_angles = tf.scalar_mul(pi, motion_angles)
 
-    return motion_angles
+            return motion_angles
 
 
 def funnet_loss(motion_angle_prediction, flow, intrinsics):
@@ -106,7 +119,7 @@ def funnet_loss(motion_angle_prediction, flow, intrinsics):
     # Epipolar error of flow
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
     print("get epipolar error")
-    loss = math_ops.reduce_mean(tf.abs(epipolar_errors(predict_fun, flow)))
+    loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
     print("done epipolar error")
     # Weight loss
     loss = tf.scalar_mul(weight, loss)

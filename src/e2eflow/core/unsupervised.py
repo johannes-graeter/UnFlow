@@ -1,16 +1,11 @@
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
-import numpy as np
 
 from .augment import random_affine, random_photometric
-from .flow_util import flow_to_color
-from .util import resize_area, resize_bilinear
-from .losses import compute_losses, create_border_mask
-from .image_warp import image_warp
+from .downsample import downsample
 from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet, funnet_loss
-from .util import to_intrinsics
-from .downsample import downsample
+from .losses import compute_losses, create_border_mask
+from .util import to_intrinsics, add_to_summary
 from .visualization import get_flow_visualization
 
 # REGISTER ALL POSSIBLE LOSS TERMS
@@ -152,9 +147,14 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             mask_s = downsample(mask_s, 2)
 
     # Add loss from epipolar geometry
-    motion_angles = funnet(flows_fw[0])
+    add_to_summary('debug/funnet/input', flows_fw[0])
+    motion_angles = funnet(flows_fw[0], trainable=True)
     intrin = to_intrinsics(params.get('focal_length'), params.get('cu'), params.get('cv'))
+
+    add_to_summary('funnet/motion_angles', motion_angles)
+    add_to_summary('funnet/final_flow', final_flow_fw)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
+    add_to_summary('funnet/loss', fun_loss)
 
     combined_loss += params.get('epipolar_loss_weight') * fun_loss
     regularization_loss = tf.losses.get_regularization_loss()

@@ -42,6 +42,7 @@ def flownet(im1, im2, flownet_spec='S', full_resolution=False, train_all=False,
                                             full_res=full_res,
                                             channel_mult=channel_mult)
                         flows_bw.append(flow_bw)
+
             elif name.lower() == 's':
                 def _flownet_s(im1, im2, flow=None):
                     if flow is not None:
@@ -175,7 +176,8 @@ def flownet_s(inputs, channel_mult=1, full_res=False):
                         data_format='NCHW',
                         weights_regularizer=slim.l2_regularizer(0.0004),
                         weights_initializer=layers.variance_scaling_initializer(),
-                        activation_fn=_leaky_relu):
+                        activation_fn=_leaky_relu,
+                        outputs_collections="flownet/flownet_s"):
         conv1 = slim.conv2d(inputs, int(64 * m), 7, stride=2, scope='conv1')
         conv2 = slim.conv2d(conv1, int(128 * m), 5, stride=2, scope='conv2')
         conv3 = slim.conv2d(conv2, int(256 * m), 5, stride=2, scope='conv3')
@@ -199,7 +201,8 @@ def flownet_c_features(im, channel_mult=1, reuse=None):
                         data_format='NCHW',
                         weights_regularizer=slim.l2_regularizer(0.0004),
                         weights_initializer=layers.variance_scaling_initializer(),
-                        activation_fn=_leaky_relu):
+                        activation_fn=_leaky_relu,
+                        outputs_collections="flownet/flownet_c_features"):
         conv1 = slim.conv2d(im, int(64 * m), 7, stride=2, scope='conv1', reuse=reuse)
         conv2 = slim.conv2d(conv1, int(128 * m), 5, stride=2, scope='conv2', reuse=reuse)
         conv3 = slim.conv2d(conv2, int(256 * m), 5, stride=2, scope='conv3', reuse=reuse)
@@ -217,7 +220,8 @@ def flownet_c(conv3_a, conv3_b, conv2_a, channel_mult=1, full_res=False):
                         data_format='NCHW',
                         weights_regularizer=slim.l2_regularizer(0.0004),
                         weights_initializer=layers.variance_scaling_initializer(),
-                        activation_fn=_leaky_relu):
+                        activation_fn=_leaky_relu,
+                        outputs_collections="flownet/flownet_c"):
         corr = correlation(conv3_a, conv3_b,
                            pad=20, kernel_size=1, max_displacement=20, stride_1=1, stride_2=2)
 

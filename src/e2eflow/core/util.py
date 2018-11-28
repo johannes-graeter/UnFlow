@@ -2,7 +2,7 @@ import tensorflow as tf
 
 
 def to_intrinsics(f, cu, cv):
-    return tf.constant([[f, 0., cu], [0., f, cv], [0., 0., 1.]])
+    return tf.constant([[float(f), 0., float(cu)], [0., float(f), float(cv)], [0., 0., 1.]])
 
 
 def repeat(mat, num, axis=0):
@@ -12,6 +12,8 @@ def repeat(mat, num, axis=0):
 def repeat2(mat, num, axis=0):
     """repeat a row with broadcasting is that faster than tf.stack?"""
     num_dims = len(mat.shape.as_list())
+    if num_dims < axis:
+        raise Exception("In repeat2: dimension to expand smaller than matrix")
     shape = [1 for i in range(num_dims)]
     shape[axis] = num
     return tf.ones(shape) * mat
@@ -68,7 +70,7 @@ def get_fundamental_matrix(angles, intrin):
     assert (five == 5)
     t = tf.constant([0., 0., 1.])
     # Hacky emulation of np.repeat
-    t = repeat2(t, batch_size)
+    t = repeat(t, batch_size)
     t = tf.expand_dims(t, axis=2)
     # Now t should have shape(batch_size,3,1)
     # Apply yaw (camera coordinates!)
@@ -88,12 +90,17 @@ def get_fundamental_matrix(angles, intrin):
     # should have hape (batch_size,3,3)
     E = tf.matmul(cross_t, rotation)
 
+    # E = tf.Print(E, ["E", E[:, :, :]])
+    # intrin = tf.Print(intrin, ["Intrinsics", *[intrin[i, j] for i in range(3) for j in range(3)]])
+
     # Calculate Fundamtenal matrix
     intrin_inv = tf.matrix_inverse(intrin)
+
     intrin_inv_tile = repeat(intrin_inv, batch_size)
     intrin_inv_t = tf.matrix_transpose(intrin_inv)
     intrin_inv_t_tile = repeat(intrin_inv_t, batch_size)
     F = tf.matmul(intrin_inv_t_tile, tf.matmul(E, intrin_inv_tile))
+    # F = tf.Print(F, [F[0, i, j] for i in range(3) for j in range(3)])
     return F
 
 
@@ -238,7 +245,7 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
 
     # Add calculated flow to images coordinates to get new flow.
     flow_vec = tf.reshape(flow, (batch_size, flow_h * flow_w, two))
-    flow_vec = tf.concat((flow_vec, tf.ones((batch_size, flow_h * flow_w, 1), )), axis=2)
+    flow_vec = tf.concat((flow_vec, tf.zeros((batch_size, flow_h * flow_w, 1), )), axis=2)
     new_points = old_points + flow_vec
 
     if bin_size > 0:
@@ -250,11 +257,31 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
     old_points = tf.expand_dims(old_points, axis=3)
     new_points = tf.expand_dims(new_points, axis=3)
 
-    print(old_points.shape.as_list(), new_points.shape.as_list())
+    add_to_summary('debug/old_points', old_points)
+    add_to_summary('debug/new_points', new_points)
+    add_to_summary('debug/pred', pred_fun)
+
+    def print_nan_tf(t, msg=""):
+        cond = tf.reduce_any(tf.is_nan(t))
+        return tf.Print(t, [msg, cond])
+
+    # def assert_nan_tf(t):
+    #     cond = tf.reduce_any(tf.is_nan(t))
+    #     return tf.assert_equal(cond, tf.constant([True]))
+
+    old_points = print_nan_tf(old_points, "old")
+    new_points = print_nan_tf(new_points, "new")
+    pred_fun = tf.Print(pred_fun,
+                        [tf.reduce_max(pred_fun), tf.reduce_min(pred_fun), tf.reduce_mean(pred_fun), pred_fun])
 
     # Calculate epipolar error.
-    error_vec = tf.matmul(new_points, tf.matmul(repeat2(pred_fun, old_points.shape.as_list()[1], axis=1), old_points),
+    repeated = repeat2(pred_fun, old_points.shape.as_list()[1], axis=1)
+    repeated = print_nan_tf(repeated, "rep")
+    add_to_summary('debug/repeated', repeated)
+    error_vec = tf.matmul(new_points, tf.matmul(repeated, old_points),
                           transpose_a=True)
+    error_vec = print_nan_tf(error_vec, 'err_v')
+    add_to_summary('debug/error', error_vec)
     return error_vec
 
 
@@ -273,3 +300,9 @@ def resize_area(tensor, like):
 def resize_bilinear(tensor, like):
     _, h, w, _ = tf.unstack(tf.shape(like))
     return tf.stop_gradient(tf.image.resize_bilinear(tensor, [h, w]))
+
+
+def add_to_summary(name, tensor):
+    tf.summary.scalar(name + '/mean', tf.reduce_mean(tensor))
+    tf.summary.scalar(name + '/max', tf.reduce_max(tensor))
+    tf.summary.scalar(name + '/min', tf.reduce_min(tensor))
