@@ -59,7 +59,7 @@ def get_cross_mat(t):
 
 def get_fundamental_matrix(angles, intrin):
     """
-    :param angles: shape(batch_size,9) roll, pitch, yaw, trans_yaw, trans_pitch
+    :param angles: shape(batch_size,5) roll, pitch, yaw, trans_yaw, trans_pitch
     :param intrin: matrix with intrinsics as constant with shape (3,3)
     :return: fundamental matrices, shape (batch_size,3,3)
     """
@@ -68,7 +68,7 @@ def get_fundamental_matrix(angles, intrin):
     assert (five == 5)
     t = tf.constant([0., 0., 1.])
     # Hacky emulation of np.repeat
-    t = repeat2(t, batch_size)
+    t = repeat(t, batch_size)
     t = tf.expand_dims(t, axis=2)
     # Now t should have shape(batch_size,3,1)
     # Apply yaw (camera coordinates!)
@@ -91,9 +91,7 @@ def get_fundamental_matrix(angles, intrin):
     # Calculate Fundamtenal matrix
     intrin_inv = tf.matrix_inverse(intrin)
     intrin_inv_tile = repeat(intrin_inv, batch_size)
-    intrin_inv_t = tf.matrix_transpose(intrin_inv)
-    intrin_inv_t_tile = repeat(intrin_inv_t, batch_size)
-    F = tf.matmul(intrin_inv_t_tile, tf.matmul(E, intrin_inv_tile))
+    F = tf.matmul(intrin_inv_tile, tf.matmul(E, intrin_inv_tile), transpose_a=True)
     return F
 
 
@@ -226,35 +224,32 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
     else:
         raise Exception("Invalid number of dimensions.")
 
-    # Expand for multiplication
-    pred_fun = tf.expand_dims(pred_fun, axis=1)
-
     flow_bs, flow_h, flow_w, two = flow.shape.as_list()
     assert (two == 2)
     assert (flow_bs == batch_size)
 
     # Get image point coordinates as flow vector in homogenous coordinates.
     old_points = get_image_coordinates_as_points((batch_size, flow_h, flow_w))
+    old_points = tf.transpose(old_points, (0, 2, 1))
 
     # Add calculated flow to images coordinates to get new flow.
     flow_vec = tf.reshape(flow, (batch_size, flow_h * flow_w, two))
-    flow_vec = tf.concat((flow_vec, tf.ones((batch_size, flow_h * flow_w, 1), )), axis=2)
+    flow_vec = tf.transpose(flow_vec, (0, 2, 1))
+    flow_vec = tf.concat((flow_vec, tf.zeros((batch_size, 1, flow_h * flow_w))), axis=1)
     new_points = old_points + flow_vec
-
-    if bin_size > 0:
-        us = [i * bin_size for i in range(int(flow_h * flow_w / bin_size))]
-        old_points = tf.gather(old_points, us, axis=1)
-        new_points = tf.gather(new_points, us, axis=1)
-
-    # Expand for multiplication
-    old_points = tf.expand_dims(old_points, axis=3)
-    new_points = tf.expand_dims(new_points, axis=3)
-
-    print(old_points.shape.as_list(), new_points.shape.as_list())
+    #
+    # if bin_size > 0:
+    #     us = [i * bin_size for i in range(int(flow_h * flow_w / bin_size))]
+    #     old_points = tf.gather(old_points, us, axis=1)
+    #     new_points = tf.gather(new_points, us, axis=1)
 
     # Calculate epipolar error.
-    error_vec = tf.matmul(new_points, tf.matmul(repeat2(pred_fun, old_points.shape.as_list()[1], axis=1), old_points),
-                          transpose_a=True)
+    tmp = tf.matmul(pred_fun, old_points)
+
+    # Get errors.
+    # This is like tf.matrix_diag_part(tf.matmul(new_points, tmp, transpose_a=True)) but with less memory usage.
+    # error_vec = tf.einsum('aij,aij->aj', new_points, tmp)  # should be the same
+    error_vec = tf.reduce_sum(tf.multiply(new_points, tmp), axis=2)
     return error_vec
 
 
