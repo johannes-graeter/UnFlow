@@ -73,9 +73,9 @@ def get_fundamental_matrix(angles, intrin):
     t = repeat(t, batch_size)
     t = tf.expand_dims(t, axis=2)
     # Now t should have shape(batch_size,3,1)
-    # Apply yaw (camera coordinates!)
+    # Apply translation yaw (camera coordinates!)
     t = tf.matmul(get_rotation(angles[:, 3], axis=1), t)
-    # Apply pitch (camera coordinates!)
+    # Apply translation pitch (camera coordinates!)
     t = tf.matmul(get_rotation(angles[:, 4], axis=0), t)
     # Get cross matrix
     cross_t = get_cross_mat(t)
@@ -270,9 +270,9 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, *, normalize=True, debu
         error_vec = tf.divide(error_vec, norm_fact)
 
     if debug:
-        add_to_summary('debug/new_points', new_points)
-        add_to_summary('debug/fundamental_matrix', pred_fun)
-        add_to_summary('debug/error', error_vec)
+        add_to_debug_output('new_points', new_points)
+        add_to_debug_output('fundamental_matrix', pred_fun)
+        add_to_debug_output('error', error_vec)
 
     return error_vec
 
@@ -299,7 +299,6 @@ def resize_bilinear(tensor, like):
     return tf.stop_gradient(tf.image.resize_bilinear(tensor, [h, w]))
 
 
-def add_to_summary(name, tensor):
-    tf.summary.scalar(name + '/mean', tf.reduce_mean(tensor))
-    tf.summary.scalar(name + '/max', tf.reduce_max(tensor))
-    tf.summary.scalar(name + '/min', tf.reduce_min(tensor))
+def add_to_debug_output(name, tensor):
+    name = 'debug/' + name
+    tf.add_to_collection('debug_tensors', tf.identity(tensor, name=name))

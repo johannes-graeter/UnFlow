@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.python.ops import math_ops
 
 from .alexnet import alexnet_v2, alexnet_v2_arg_scope
-from .util import add_to_summary
+from .util import add_to_debug_output
 from .util import epipolar_errors
 from .util import get_fundamental_matrix
 
@@ -90,13 +90,13 @@ def funnet(flow, trainable=False):
                                          spatial_squeeze=False)
             bs, height, width, channels = net.shape.as_list()
             net = tf.reshape(net, (bs, height * width * channels))
-            add_to_summary('debug/alexnet/output', net)
+            add_to_debug_output('debug/alexnet/output', net)
         # print(end_points)
 
         with slim.arg_scope([slim.fully_connected],
-                            biases_initializer=tf.constant_initializer(0.1),
+                            biases_initializer=tf.constant_initializer(0.0001),  # very small bias
                             weights_regularizer=slim.l2_regularizer(weight_decay),
-                            weights_initializer=tf.truncated_normal_initializer(0.0, 0.005),
+                            weights_initializer=tf.truncated_normal_initializer(0.0, 0.05),  # ca. 10 degrees std dev
                             outputs_collections="motion_angles"):
             motion_angles = slim.fully_connected(net, 5, activation_fn=tf.nn.tanh, scope="fc_final")
             # add_to_summary('debug/funnet/output', net)

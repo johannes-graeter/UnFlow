@@ -13,7 +13,7 @@ from .input import resize_input, resize_output_crop, resize_output, resize_outpu
 from .losses import occlusion, DISOCC_THRESH, create_outgoing_mask
 from .supervised import supervised_loss
 from .unsupervised import unsupervised_loss
-from .util import add_to_summary
+from .util import add_to_debug_output
 from .util import summarized_placeholder
 from ..gui import display
 from ..ops import forward_warp
@@ -84,7 +84,7 @@ def _add_variable_summaries():
 
     def add_weights(layer_name):
         conv5_vars = tf.get_default_graph().get_tensor_by_name('funnet/alexnet_v2/{}/weights:0'.format(layer_name))
-        add_to_summary('debug/{}/weights'.format(layer_name), conv5_vars)
+        add_to_debug_output('debug/{}/weights'.format(layer_name), conv5_vars)
 
         # for n in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5']:
         # add_weights(n)
@@ -110,6 +110,15 @@ def _add_image_summaries():
     for im in images:
         tensor_name = re.sub('tower_[0-9]*/', '', im.op.name)
         tf.summary.image(tensor_name, im)
+
+
+def _add_debug_tensor_summaries():
+    ts = tf.get_collection('debug_tensors')
+    for t in ts:
+        name = re.sub('tower_[0-9]*/', '', t.op.name)
+        tf.summary.scalar(name + '/mean', tf.reduce_mean(t))
+        tf.summary.scalar(name + '/max', tf.reduce_max(t))
+        tf.summary.scalar(name + '/min', tf.reduce_min(t))
 
 
 def _eval_plot(results, image_names, title):
@@ -182,10 +191,11 @@ class Trainer():
             _add_variable_summaries()
             if self.debug:
                 _add_image_summaries()
+                _add_debug_tensor_summaries()
 
         if len(self.devices) == 1:
             loss_ = self.loss_fn(batch, self.params, self.normalization)
-            if self.params['train_motion_only']:
+            if self.params.get('train_motion_only'):
                 scope = "funnet"
             else:
                 scope = None

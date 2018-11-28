@@ -29,7 +29,7 @@ Usage:
 
 import tensorflow as tf
 
-from .util import add_to_summary
+from .util import add_to_debug_output
 
 slim = tf.contrib.slim
 trunc_normal = lambda stddev: tf.truncated_normal_initializer(0.0, stddev)
