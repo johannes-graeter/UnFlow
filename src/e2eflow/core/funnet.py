@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn
 
 from .alexnet import alexnet_v2, alexnet_v2_arg_scope
 from .util import add_to_summary
@@ -114,16 +113,17 @@ def funnet_loss(motion_angle_prediction, flow, intrinsics):
     # flow2 = tf.multiply(flow, flow)
     # weight = tf.reduce_mean(tf.reduce_sum(flow2, axis=2))
     weight = 1.
+
     # Several flow layers are outputted at different resolution.
     # First two are always du and dv at highest res.
     # Epipolar error of flow
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
-    print("get epipolar error")
-    loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
-    print("done epipolar error")
-    # Weight loss
-    loss = tf.scalar_mul(weight, loss)
-    tf.losses.add_loss(loss)
+
+    # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
+    loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, normalize=True, debug=True))
+
+    # Add loss
+    tf.losses.add_loss(tf.scalar_mul(weight, loss))
 
     # Return the 'total' loss: loss fns + regularization terms defined in the model
     return tf.losses.get_total_loss()

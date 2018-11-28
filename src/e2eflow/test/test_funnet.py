@@ -75,13 +75,19 @@ class TestEpipolarError(unittest.TestCase):
         # f must have shape (num_batches, 9, 1)
         f0 = tf.expand_dims(tf.convert_to_tensor(F.reshape(1, 9), np.float32), axis=2)
 
-        errs0 = epipolar_errors(f0, flow_tf)
+        # Test unnormalized
+        errs0 = epipolar_errors(f0, flow_tf, normalize=False)
+        errs1 = epipolar_errors(f0, flow_tf)
 
         with tf.Session() as sess:
             a = tf.reduce_sum(errs0).eval()
+            a1 = tf.reduce_sum(errs1).eval()
 
         self.assertEqual(len(errs0.shape.as_list()), 2)
-        self.assertLess(a, 1e-8)
+        self.assertEqual(errs0.shape.as_list()[1], 5 * 5)
+        self.assertLess(a, 1e-16)
+        self.assertLess(a1, 1e-10)
+        self.assertLess(a, a1)
 
     def test_fundamental_matrix(self):
         r_p_y_ty_tp = np.array([0, 0, 5. / 180. * np.pi, 10. / 180. * np.pi, 0.])

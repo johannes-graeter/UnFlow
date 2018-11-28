@@ -208,7 +208,7 @@ def get_image_coordinates_as_points(shape):
     return uv1_vec
 
 
-def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
+def epipolar_errors(predict_fundamental_matrix_in, flow, *, normalize=True, debug=False):
     """
     return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
@@ -246,17 +246,33 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
     #     new_points = tf.gather(new_points, us, axis=1)
 
     # Calculate epipolar error.
-    tmp = tf.matmul(pred_fun, old_points)
-
-    # Get errors.
+    Fx = tf.matmul(pred_fun, old_points)  # needed for normalization
     # This is like tf.matrix_diag_part(tf.matmul(new_points, tmp, transpose_a=True)) but with less memory usage.
-    # error_vec = tf.einsum('aij,aij->aj', new_points, tmp)  # should be the same
-    error_vec = tf.reduce_sum(tf.multiply(new_points, tmp), axis=2)
+    # error_vec = tf.einsum('aij,aij->aj', new_points, Fx)  # should be the same
+    error_vec = tf.reduce_sum(tf.multiply(new_points, Fx), axis=1)
 
-    add_to_summary('debug/old_points', old_points)
-    add_to_summary('debug/new_points', new_points)
-    add_to_summary('debug/pred', pred_fun)
-    add_to_summary('debug/error', error_vec)
+    # Square the error
+    error_vec = tf.multiply(error_vec, error_vec)
+
+    if normalize:
+        # Normalize the metric using the sampson distance
+        # , which is the first order approximation to the geometric distance (i.e. reprojection error)
+        # see Multiple View geometry p.287
+        Ftxp = tf.matmul(tf.matrix_transpose(pred_fun), new_points)  # this is F^Tx' form hartley
+        Ftxp2 = tf.multiply(Ftxp, Ftxp)  # shape (bs, 3, num_pixels)
+
+        Fx2 = tf.multiply(Fx, Fx)  # shape (bs, 3, num_pixels)
+
+        norm_fact = Fx2[:, 0, :] + Fx2[:, 1, :] + Ftxp2[:, 0, :] + Ftxp2[:, 1, :]  # shape (bs, num_pixels)
+
+        # don't divide by zero
+        norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e10)
+        error_vec = tf.divide(error_vec, norm_fact)
+
+    if debug:
+        add_to_summary('debug/new_points', new_points)
+        add_to_summary('debug/fundamental_matrix', pred_fun)
+        add_to_summary('debug/error', error_vec)
 
     return error_vec
 
