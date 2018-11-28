@@ -185,7 +185,11 @@ class Trainer():
 
         if len(self.devices) == 1:
             loss_ = self.loss_fn(batch, self.params, self.normalization)
-            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "funnet")
+            if self.params['train_motion_only']:
+                scope = "funnet"
+            else:
+                scope = None
+            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope)
             train_op = opt.minimize(loss_, var_list=train_vars)
             _add_summaries()
         else:

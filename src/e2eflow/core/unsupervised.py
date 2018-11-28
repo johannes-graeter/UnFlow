@@ -156,8 +156,13 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
     fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
     add_to_summary('funnet/loss', fun_loss)
 
-    combined_loss += params.get('epipolar_loss_weight') * fun_loss
-    regularization_loss = tf.losses.get_regularization_loss()
+    if params.get('train_motion_only'):
+        combined_loss = params.get('epipolar_loss_weight') * fun_loss
+        regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
+    else:
+        combined_loss += params.get('epipolar_loss_weight') * fun_loss
+        regularization_loss = tf.losses.get_regularization_loss()
+
     final_loss = combined_loss + regularization_loss
 
     _track_loss(final_loss, 'loss/combined')
