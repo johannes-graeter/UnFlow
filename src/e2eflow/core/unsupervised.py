@@ -147,9 +147,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             mask_s = downsample(mask_s, 2)
 
     # Add loss from epipolar geometry
-    for f in flows_fw:
-        print(f.shape.as_list())
-    motion_angles = funnet(flows_fw[0], trainable=True)
+    motion_angles = funnet(flows_fw[0], trainable=True)  # Todo: get rid of dropout(for trainable flag)
     intrin = to_intrinsics(params.get('focal_length'), params.get('cu'), params.get('cv'))
     fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
 

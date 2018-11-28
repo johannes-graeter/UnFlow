@@ -114,6 +114,9 @@ def random_crop(tensors, size, seed=None, name=None):
     """Randomly crops multiple tensors (of the same shape) to a given size.
 
     Each tensor is cropped in the same way."""
+
+    raise Exception("Attention: Random crop breaks intrinsics.")
+
     with tf.name_scope(name, "random_crop", [size]) as name:
         size = tf.convert_to_tensor(size, dtype=tf.int32, name="size")
         if len(tensors) == 2:

@@ -157,7 +157,7 @@ class Input():
                     if self.skipped_frames and sequence:
                         assert step == 1
                         num_first = frame_name_to_num(files[i])
-                        num_second = frame_name_to_num(files[i+1])
+                        num_second = frame_name_to_num(files[i + 1])
                         if num_first + 1 != num_second:
                             continue
                     fn1 = os.path.join(dir_path, files[i])
@@ -176,7 +176,6 @@ class Input():
 
         shift = shift % len(filenames_extended)
         filenames_extended = list(np.roll(filenames_extended, shift))
-
 
         filenames_1, filenames_2 = zip(*filenames_extended)
         filenames_1 = list(filenames_1)
@@ -209,7 +208,7 @@ class Input():
 def read_png_image(filenames, num_epochs=None):
     """Given a list of filenames, constructs a reader op for images."""
     filename_queue = tf.train.string_input_producer(filenames,
-        shuffle=False, capacity=len(filenames))
+                                                    shuffle=False, capacity=len(filenames))
     reader = tf.WholeFileReader()
     _, value = reader.read(filename_queue)
     image_uint8 = tf.image.decode_png(value, channels=3)

@@ -60,6 +60,7 @@ def main(argv=None):
                         dims=(384, 1280))
 
     if train_dataset == 'chairs':
+        raise Exception("Motion trianing not yet implemented.")
         cconfig = copy.deepcopy(experiment.config['train'])
         cconfig.update(experiment.config['train_chairs'])
         convert_input_strings(cconfig, dirs)
@@ -114,6 +115,7 @@ def main(argv=None):
         tr.run(0, kiters)
 
     elif train_dataset == 'cityscapes':
+        raise Exception("Motion trianing not yet implemented.")
         kconfig = copy.deepcopy(experiment.config['train'])
         kconfig.update(experiment.config['train_cityscapes'])
         convert_input_strings(kconfig, dirs)
@@ -145,6 +147,7 @@ def main(argv=None):
         tr.run(0, kiters)
 
     elif train_dataset == 'synthia':
+        raise Exception("Motion trianing not yet implemented.")
         sconfig = copy.deepcopy(experiment.config['train'])
         sconfig.update(experiment.config['train_synthia'])
         convert_input_strings(sconfig, dirs)
@@ -173,6 +176,7 @@ def main(argv=None):
         tr.run(0, siters)
 
     elif train_dataset == 'kitti_ft':
+        raise Exception("Motion trianing not yet implemented.")
         ftconfig = copy.deepcopy(experiment.config['train'])
         ftconfig.update(experiment.config['train_kitti_ft'])
         convert_input_strings(ftconfig, dirs)
