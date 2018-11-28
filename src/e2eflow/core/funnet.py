@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import nn
 
 from .alexnet import alexnet_v2, alexnet_v2_arg_scope
 from .util import add_to_summary
@@ -98,9 +99,8 @@ def funnet(flow, trainable=False):
                             weights_regularizer=slim.l2_regularizer(weight_decay),
                             weights_initializer=tf.truncated_normal_initializer(0.0, 0.005),
                             outputs_collections="motion_angles"):
-            motion_angles = slim.fully_connected(net, 5, activation_fn=tf.nn.tanh)
+            motion_angles = slim.fully_connected(net, 5, activation_fn=tf.nn.tanh, scope="fc_final")
             # add_to_summary('debug/funnet/output', net)
-            print(motion_angles)
             pi = 3.14159265358979323846
             motion_angles = tf.scalar_mul(pi, motion_angles)
 

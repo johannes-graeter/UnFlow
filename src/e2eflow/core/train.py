@@ -19,9 +19,6 @@ from ..gui import display
 from ..ops import forward_warp
 
 
-# from matplotlib.pyplot import plot, show
-
-
 def restore_networks(sess, params, ckpt, ckpt_path=None):
     finetune = params.get('finetune', [])
     train_all = params.get('train_all', None)
@@ -89,16 +86,16 @@ def _add_variable_summaries():
         conv5_vars = tf.get_default_graph().get_tensor_by_name('funnet/alexnet_v2/{}/weights:0'.format(layer_name))
         add_to_summary('debug/{}/weights'.format(layer_name), conv5_vars)
 
-    #for n in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5']:
-        #add_weights(n)
-    # act = tf.get_collection('funnet/alexnet_v2/fc8')
-    # print(act)
-    # bs, a, b, c = act[0].shape.as_list()
-    # act = tf.reshape(act, (bs, a * b * c))
-    # for i in range(batch_size):
-    #     for j in range(a * b * c):
-    #         tensor_names = "motion_angles/batch{}/activation{}".format(i, j)
-    #         tf.summary.scalar(tensor_names, act[i, j])
+        # for n in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5']:
+        # add_weights(n)
+        # act = tf.get_collection('funnet/alexnet_v2/fc8')
+        # print(act)
+        # bs, a, b, c = act[0].shape.as_list()
+        # act = tf.reshape(act, (bs, a * b * c))
+        # for i in range(batch_size):
+        #     for j in range(a * b * c):
+        #         tensor_names = "motion_angles/batch{}/activation{}".format(i, j)
+        #         tf.summary.scalar(tensor_names, act[i, j])
 
 
 def _add_param_summaries():
@@ -188,8 +185,7 @@ class Trainer():
 
         if len(self.devices) == 1:
             loss_ = self.loss_fn(batch, self.params, self.normalization)
-            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                           "funnet")
+            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "funnet")
             train_op = opt.minimize(loss_, var_list=train_vars)
             _add_summaries()
         else:
@@ -236,66 +232,65 @@ class Trainer():
             sess_config = tf.ConfigProto(allow_soft_placement=True)
 
             with tf.Session(config=sess_config) as sess:
-                with sess.as_default():
-                    if self.debug:
-                        summary_writer = tf.summary.FileWriter(self.train_summaries_dir,
-                                                               sess.graph)
-                        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE,
-                                                    report_tensor_allocations_upon_oom=True)
-                        # run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-                        run_metadata = tf.RunMetadata()
+                if self.debug:
+                    summary_writer = tf.summary.FileWriter(self.train_summaries_dir,
+                                                           sess.graph)
+                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE,
+                                                report_tensor_allocations_upon_oom=True)
+                    # run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+                    run_metadata = tf.RunMetadata()
+                else:
+                    summary_writer = tf.summary.FileWriter(self.train_summaries_dir)
+                    run_options = None
+                    run_metadata = None
+
+                saver = restore_networks(sess, self.params, ckpt)
+
+                coord = tf.train.Coordinator()
+                threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+                for local_i, i in enumerate(range(start_iter, max_iter + 1)):
+                    # if INTERACTIVE_PLOT:
+                    #    plt.title = "{} ({})".format(self.experiment, i)
+                    decay_iters = local_i + iter_offset
+                    if 'manual_decay_lrs' in self.params \
+                            and 'manual_decay_iters' in self.params:
+                        decay_index = 0
+                        iter_counter = 0
+                        for decay_i, manual_decay_iter in enumerate(self.params['manual_decay_iters']):
+                            iter_counter += manual_decay_iter
+                            if decay_iters <= iter_counter:
+                                decay_index = decay_i
+                                break
+                        learning_rate = self.params['manual_decay_lrs'][decay_index]
                     else:
-                        summary_writer = tf.summary.FileWriter(self.train_summaries_dir)
-                        run_options = None
-                        run_metadata = None
-
-                    saver = restore_networks(sess, self.params, ckpt)
-
-                    coord = tf.train.Coordinator()
-                    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-
-                    for local_i, i in enumerate(range(start_iter, max_iter + 1)):
-                        # if INTERACTIVE_PLOT:
-                        #    plt.title = "{} ({})".format(self.experiment, i)
-                        decay_iters = local_i + iter_offset
-                        if 'manual_decay_lrs' in self.params \
-                                and 'manual_decay_iters' in self.params:
-                            decay_index = 0
-                            iter_counter = 0
-                            for decay_i, manual_decay_iter in enumerate(self.params['manual_decay_iters']):
-                                iter_counter += manual_decay_iter
-                                if decay_iters <= iter_counter:
-                                    decay_index = decay_i
-                                    break
-                            learning_rate = self.params['manual_decay_lrs'][decay_index]
+                        decay_interval = self.params['decay_interval']
+                        decay_after = self.params.get('decay_after', 0)
+                        if decay_iters >= decay_after:
+                            decay_minimum = decay_after / decay_interval
+                            decay = (decay_iters // decay_interval) - decay_minimum
+                            learning_rate = self.params['learning_rate'] / (2 ** decay)
                         else:
-                            decay_interval = self.params['decay_interval']
-                            decay_after = self.params.get('decay_after', 0)
-                            if decay_iters >= decay_after:
-                                decay_minimum = decay_after / decay_interval
-                                decay = (decay_iters // decay_interval) - decay_minimum
-                                learning_rate = self.params['learning_rate'] / (2 ** decay)
-                            else:
-                                learning_rate = self.params['learning_rate']
+                            learning_rate = self.params['learning_rate']
 
-                        feed_dict = {learning_rate_: learning_rate, global_step_: i}
-                        _, loss = sess.run(
-                            [train_op, loss_],
-                            feed_dict=feed_dict,
-                            options=run_options,
-                            run_metadata=run_metadata)
+                    feed_dict = {learning_rate_: learning_rate, global_step_: i}
+                    _, loss = sess.run(
+                        [train_op, loss_],
+                        feed_dict=feed_dict,
+                        options=run_options,
+                        run_metadata=run_metadata)
 
-                        if i == 1 or i % self.params['display_interval'] == 0:
-                            summary = sess.run(summary_, feed_dict=feed_dict)
-                            summary_writer.add_summary(summary, i)
-                            print("-- train: i = {}, loss = {}".format(i, loss))
+                    if i == 1 or i % self.params['display_interval'] == 0:
+                        summary = sess.run(summary_, feed_dict=feed_dict)
+                        summary_writer.add_summary(summary, i)
+                        print("-- train: i = {}, loss = {}".format(i, loss))
 
-                    save_path = os.path.join(self.ckpt_dir, 'model.ckpt')
-                    saver.save(sess, save_path, global_step=max_iter)
+                save_path = os.path.join(self.ckpt_dir, 'model.ckpt')
+                saver.save(sess, save_path, global_step=max_iter)
 
-                    summary_writer.close()
-                    coord.request_stop()
-                    coord.join(threads)
+                summary_writer.close()
+                coord.request_stop()
+                coord.join(threads)
 
     def eval(self, num):
         assert num == 1  # TODO enable num > 1

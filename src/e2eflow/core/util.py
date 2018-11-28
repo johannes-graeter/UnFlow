@@ -90,12 +90,8 @@ def get_fundamental_matrix(angles, intrin):
     # should have hape (batch_size,3,3)
     E = tf.matmul(cross_t, rotation)
 
-    # E = tf.Print(E, ["E", E[:, :, :]])
-    # intrin = tf.Print(intrin, ["Intrinsics", *[intrin[i, j] for i in range(3) for j in range(3)]])
-
     # Calculate Fundamtenal matrix
     intrin_inv = tf.matrix_inverse(intrin)
-
     intrin_inv_tile = repeat(intrin_inv, batch_size)
     F = tf.matmul(intrin_inv_tile, tf.matmul(E, intrin_inv_tile), transpose_a=True)
     return F

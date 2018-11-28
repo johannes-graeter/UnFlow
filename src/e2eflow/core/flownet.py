@@ -42,7 +42,6 @@ def flownet(im1, im2, flownet_spec='S', full_resolution=False, train_all=False,
                                             full_res=full_res,
                                             channel_mult=channel_mult)
                         flows_bw.append(flow_bw)
-
             elif name.lower() == 's':
                 def _flownet_s(im1, im2, flow=None):
                     if flow is not None:
