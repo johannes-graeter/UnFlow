@@ -92,15 +92,12 @@ def alexnet_v2(inputs,
             net = slim.conv2d(inputs, 64, [11, 11], 4, padding='VALID',
                               scope='conv1')
             net = slim.max_pool2d(net, [3, 3], 2, scope='pool1')
-            add_to_summary('pool1/activations', net)
             net = slim.conv2d(net, 192, [5, 5], scope='conv2')
             net = slim.max_pool2d(net, [3, 3], 2, scope='pool2')
-            # add_to_summary('pool2/activations', net)
             net = slim.conv2d(net, 384, [3, 3], scope='conv3')
             net = slim.conv2d(net, 384, [3, 3], scope='conv4')
             net = slim.conv2d(net, 256, [3, 3], scope='conv5')
             net = slim.max_pool2d(net, [3, 3], 2, scope='pool5')
-            # add_to_summary('pool5/activations', net)
 
             # Use conv2d instead of fully_connected layers.
             with slim.arg_scope([slim.conv2d],
@@ -111,25 +108,20 @@ def alexnet_v2(inputs,
                 #        net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
                 #                           scope='dropout6')
                 net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
-                # add_to_summary('fc7/activations', net)
                 # Convert end_points_collection into a end_point dict.
                 end_points = slim.utils.convert_collection_to_dict(
                     end_points_collection)
                 if global_pool:
                     net = tf.reduce_mean(net, [1, 2], keepdims=True, name='global_pool')
                     end_points['global_pool'] = net
-                    # add_to_summary('global_pool/activations', net)
                 if num_classes:
                     net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
                                        scope='dropout7')
-                    # add_to_summary('dropout/activations', net)
-                    # net = slim.conv2d(net, num_classes, [1, 1],
-                    #                   activation_fn=None,
-                    #                   normalizer_fn=None,
-                    #                   biases_initializer=tf.zeros_initializer(),
-                    #                   scope='fc8')
-                    net = slim.conv2d(net, num_classes, [1, 1], scope='fc8')
-                    # add_to_summary('fc8/activations', net)
+                    net = slim.conv2d(net, num_classes, [1, 1],
+                                      activation_fn=None,
+                                      normalizer_fn=None,
+                                      biases_initializer=tf.zeros_initializer(),
+                                      scope='fc8')
                     if spatial_squeeze:
                         net = tf.squeeze(net, [1, 2], name='fc8/squeezed')
                     end_points[sc.name + '/fc8'] = net

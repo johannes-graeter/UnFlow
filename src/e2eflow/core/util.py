@@ -243,28 +243,11 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
     flow_vec = tf.transpose(flow_vec, (0, 2, 1))
     flow_vec = tf.concat((flow_vec, tf.zeros((batch_size, 1, flow_h * flow_w))), axis=1)
     new_points = old_points + flow_vec
-    #
+
     # if bin_size > 0:
     #     us = [i * bin_size for i in range(int(flow_h * flow_w / bin_size))]
     #     old_points = tf.gather(old_points, us, axis=1)
     #     new_points = tf.gather(new_points, us, axis=1)
-
-    add_to_summary('debug/old_points', old_points)
-    add_to_summary('debug/new_points', new_points)
-    add_to_summary('debug/pred', pred_fun)
-
-    def print_nan_tf(t, msg=""):
-        cond = tf.reduce_any(tf.is_nan(t))
-        return tf.Print(t, [msg, cond])
-
-    # def assert_nan_tf(t):
-    #     cond = tf.reduce_any(tf.is_nan(t))
-    #     return tf.assert_equal(cond, tf.constant([True]))
-
-    old_points = print_nan_tf(old_points, "old")
-    new_points = print_nan_tf(new_points, "new")
-    pred_fun = tf.Print(pred_fun,
-                        [tf.reduce_max(pred_fun), tf.reduce_min(pred_fun), tf.reduce_mean(pred_fun), pred_fun])
 
     # Calculate epipolar error.
     tmp = tf.matmul(pred_fun, old_points)
@@ -273,9 +256,18 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, bin_size=-1):
     # This is like tf.matrix_diag_part(tf.matmul(new_points, tmp, transpose_a=True)) but with less memory usage.
     # error_vec = tf.einsum('aij,aij->aj', new_points, tmp)  # should be the same
     error_vec = tf.reduce_sum(tf.multiply(new_points, tmp), axis=2)
-    error_vec = print_nan_tf(error_vec, 'err_v')
+
+    add_to_summary('debug/old_points', old_points)
+    add_to_summary('debug/new_points', new_points)
+    add_to_summary('debug/pred', pred_fun)
     add_to_summary('debug/error', error_vec)
+
     return error_vec
+
+
+def print_nan_tf(t, msg=""):
+    cond = tf.reduce_any(tf.is_nan(t))
+    return tf.Print(t, [msg, cond])
 
 
 def summarized_placeholder(name, prefix=None, key=tf.GraphKeys.SUMMARIES):
