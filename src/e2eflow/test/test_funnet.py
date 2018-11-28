@@ -1,10 +1,12 @@
 import unittest
-# from .funnet import FunNet
-from ..core.util import epipolar_errors
-from ..core.util import get_fundamental_matrix as get_fun_tf
+
 import numpy as np
 # from matplotlib import pyplot as plt
 import tensorflow as tf
+
+# from .funnet import FunNet
+from ..core.util import epipolar_errors
+from ..core.util import get_fundamental_matrix as get_fun_tf
 
 
 def get_rotation(angle, axis=0):
@@ -78,6 +80,7 @@ class TestEpipolarError(unittest.TestCase):
         with tf.Session() as sess:
             a = tf.reduce_sum(errs0).eval()
 
+        self.assertEqual(len(errs0.shape.as_list()), 2)
         self.assertLess(a, 1e-8)
 
     def test_fundamental_matrix(self):
