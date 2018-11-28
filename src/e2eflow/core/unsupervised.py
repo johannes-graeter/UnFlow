@@ -147,6 +147,8 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             mask_s = downsample(mask_s, 2)
 
     # Add loss from epipolar geometry
+    for f in flows_fw:
+        print(f.shape.as_list())
     motion_angles = funnet(flows_fw[0], trainable=True)
     intrin = to_intrinsics(params.get('focal_length'), params.get('cu'), params.get('cv'))
     fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
@@ -175,7 +177,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             weight = tf.identity(params[weight_name], name='weight/' + loss)
             tf.add_to_collection('params', weight)
 
-    for cur_flow in flows_fw:
+    for i, cur_flow in enumerate(flows_fw):
         _track_image(get_flow_visualization(cur_flow), 'flow_{}'.format(i))
     _track_image(get_flow_visualization(final_flow_fw), 'estimated_flow')
 

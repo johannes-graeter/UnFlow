@@ -140,7 +140,6 @@ class Input():
 
         data_dirs = self.data.get_raw_dirs()
         height, width = self.dims
-        #assert batch_size % 2 == 0
 
         filenames = []
         for dir_path in data_dirs:
@@ -188,11 +187,11 @@ class Input():
             image_2 = read_png_image(filenames_2)
 
             if needs_crop:
-                #if center_crop:
-                #    image_1 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
-                #    image_2 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
-                #else:
-                image_1, image_2 = random_crop([image_1, image_2], [height, width, 3])
+                if center_crop:
+                    image_1 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
+                    image_2 = tf.image.resize_image_with_crop_or_pad(image_2, height, width)
+                else:
+                    image_1, image_2 = random_crop([image_1, image_2], [height, width, 3])
             else:
                 image_1 = tf.reshape(image_1, [height, width, 3])
                 image_2 = tf.reshape(image_2, [height, width, 3])
