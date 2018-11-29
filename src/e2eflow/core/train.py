@@ -20,12 +20,13 @@ from ..ops import forward_warp
 
 
 def restore_networks(sess, params, ckpt, ckpt_path=None):
+    # Attention this is converted to checkpoints in e2eflow/util.py::convert_input_strings
     finetune = params.get('finetune', [])
     train_all = params.get('train_all', None)
     spec = params.get('flownet', 'S')
     flownet_num = len(spec)
 
-    net_names = ['flownet_c'] + ['stack_{}_flownet'.format(i + 1) for i in range(flownet_num - 1)]
+    net_names = ['flownet_c'] + ['stack_{}_flownet'.format(i + 1) for i in range(flownet_num - 1)] + ['funnet']
     assert len(finetune) <= flownet_num
     # Save all trained networks, restore all networks which are kept fixed
     if train_all:
@@ -33,7 +34,7 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
         variables_to_save = slim.get_variables_to_restore(include=net_names)
     else:
         restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
-        variables_to_save = slim.get_variables_to_restore(include=[net_names[-1]])
+        variables_to_save = slim.get_variables_to_restore(include=net_names[-2:])
 
     saver = tf.train.Saver(variables_to_save, max_to_keep=1000)
 
@@ -173,7 +174,7 @@ class Trainer():
         assert (max_iter - start_iter + 1) % save_interval == 0
         for i in range(start_iter, max_iter + 1, save_interval):
             self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            self.eval(1)
+            #self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()

@@ -81,8 +81,6 @@ def _leaky_relu(x):
 
 
 def funnet(flow, trainable=False):
-    _, height, width, _ = flow.shape.as_list()
-
     with tf.variable_scope('funnet') as sc:
         weight_decay = 0.0005
         with slim.arg_scope(alexnet_v2_arg_scope(weight_decay)):
@@ -91,7 +89,6 @@ def funnet(flow, trainable=False):
             bs, height, width, channels = net.shape.as_list()
             net = tf.reshape(net, (bs, height * width * channels))
             add_to_debug_output('debug/alexnet/output', net)
-        # print(end_points)
 
         with slim.arg_scope([slim.fully_connected],
                             biases_initializer=tf.constant_initializer(0.0001),  # very small bias
