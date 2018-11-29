@@ -29,8 +29,6 @@ Usage:
 
 import tensorflow as tf
 
-from .util import add_to_debug_output
-
 slim = tf.contrib.slim
 trunc_normal = lambda stddev: tf.truncated_normal_initializer(0.0, stddev)
 
@@ -51,8 +49,7 @@ def alexnet_v2(inputs,
                is_training=True,
                dropout_keep_prob=0.5,
                spatial_squeeze=True,
-               scope='alexnet_v2',
-               global_pool=False):
+               scope='alexnet_v2'):
     """AlexNet version 2.
     Described in: http://arxiv.org/pdf/1404.5997v2.pdf
     Parameters from:
@@ -91,13 +88,13 @@ def alexnet_v2(inputs,
                             outputs_collections=[end_points_collection]):
             net = slim.conv2d(inputs, 64, [11, 11], 4, padding='VALID',
                               scope='conv1')
-            net = slim.max_pool2d(net, [3, 3], 2, scope='pool1')
+            # net = slim.max_pool2d(net, [3, 3], 2, scope='pool1')
             net = slim.conv2d(net, 192, [5, 5], scope='conv2')
             net = slim.max_pool2d(net, [3, 3], 2, scope='pool2')
             net = slim.conv2d(net, 384, [3, 3], scope='conv3')
             net = slim.conv2d(net, 384, [3, 3], scope='conv4')
             net = slim.conv2d(net, 256, [3, 3], scope='conv5')
-            net = slim.max_pool2d(net, [3, 3], 2, scope='pool5')
+            # net = slim.max_pool2d(net, [3, 3], 2, scope='pool5')
 
             # Use conv2d instead of fully_connected layers.
             with slim.arg_scope([slim.conv2d],
@@ -107,13 +104,10 @@ def alexnet_v2(inputs,
                 #                          scope='fc6')
                 #        net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
                 #                           scope='dropout6')
-                net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
+                net = slim.conv2d(net, 1024, [1, 1], scope='fc7')
                 # Convert end_points_collection into a end_point dict.
                 end_points = slim.utils.convert_collection_to_dict(
                     end_points_collection)
-                if global_pool:
-                    net = tf.reduce_mean(net, [1, 2], keepdims=True, name='global_pool')
-                    end_points['global_pool'] = net
                 if num_classes:
                     net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
                                        scope='dropout7')
