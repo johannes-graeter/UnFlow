@@ -80,12 +80,12 @@ def _leaky_relu(x):
 #             return motion_angles
 
 
-def funnet(flow, trainable=False):
+def funnet(flow):
     with tf.variable_scope('funnet') as sc:
         weight_decay = 0.0005
         with slim.arg_scope(alexnet_v2_arg_scope(weight_decay)):
             # Num classes
-            net, end_points = alexnet_v2(flow, num_classes=5, is_training=trainable, spatial_squeeze=False)
+            net, end_points = alexnet_v2(flow, num_classes=5, spatial_squeeze=False)
             bs, height, width, channels = net.shape.as_list()
             net = tf.reshape(net, (bs, height * width * channels))
             add_to_debug_output('debug/alexnet/output', net)

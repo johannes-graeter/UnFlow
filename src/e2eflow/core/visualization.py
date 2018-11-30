@@ -30,8 +30,7 @@ def get_flow_visualization(flow_tf):
     flow_viz = tf.stack((flow_viz0, flow_viz1, flow_viz2), axis=3)
 
     # clip to [0,1]
-    flow_viz = tf.maximum(flow_viz, tf.zeros_like(flow_viz))
-    flow_viz = tf.minimum(flow_viz, tf.ones_like(flow_viz))
+    flow_viz = tf.clip_by_value(flow_viz, clip_value_min=0., clip_value_max=1.)
     # convert to rgb
     flow_viz = tf.image.hsv_to_rgb(flow_viz)
 

@@ -4,6 +4,7 @@ from .augment import random_affine, random_photometric
 from .downsample import downsample
 from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet, funnet_loss
+from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask
 from .util import to_intrinsics, add_to_debug_output
 from .visualization import get_flow_visualization
@@ -147,7 +148,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
             mask_s = downsample(mask_s, 2)
 
     # Add loss from epipolar geometry
-    motion_angles = funnet(flows_fw[0], trainable=True)  # Todo: get rid of dropout(for trainable flag)
+    motion_angles = funnet(flows_fw[0])
     intrin = to_intrinsics(params.get('focal_length'), params.get('cu'), params.get('cv'))
     fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
 
@@ -178,6 +179,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
     for i, cur_flow in enumerate(flows_fw):
         _track_image(get_flow_visualization(cur_flow), 'flow_{}'.format(i))
     _track_image(get_flow_visualization(final_flow_fw), 'estimated_flow')
+    _track_image(image_warp(im1, final_flow_fw), 'warp_1to2')
 
     if not return_flow:
         return final_loss

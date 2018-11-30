@@ -46,8 +46,6 @@ def alexnet_v2_arg_scope(weight_decay=0.0005):
 
 def alexnet_v2(inputs,
                num_classes=1000,
-               is_training=True,
-               dropout_keep_prob=0.5,
                spatial_squeeze=True,
                scope='alexnet_v2'):
     """AlexNet version 2.
@@ -65,9 +63,6 @@ def alexnet_v2(inputs,
       inputs: a tensor of size [batch_size, height, width, channels].
       num_classes: the number of predicted classes. If 0 or None, the logits layer
       is omitted and the input features to the logits layer are returned instead.
-      is_training: whether or not the model is being trained.
-      dropout_keep_prob: the probability that activations are kept in the dropout
-        layers during training.
       spatial_squeeze: whether or not should squeeze the spatial dimensions of the
         logits. Useful to remove unnecessary dimensions for classification.
       scope: Optional scope for the variables.
@@ -102,15 +97,11 @@ def alexnet_v2(inputs,
                                 biases_initializer=tf.constant_initializer(0.1)):
                 #        net = slim.conv2d(net, 4096, [5, 5], padding='VALID',
                 #                          scope='fc6')
-                #        net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
-                #                           scope='dropout6')
                 net = slim.conv2d(net, 1024, [1, 1], scope='fc7')
                 # Convert end_points_collection into a end_point dict.
                 end_points = slim.utils.convert_collection_to_dict(
                     end_points_collection)
                 if num_classes:
-                    net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
-                                       scope='dropout7')
                     net = slim.conv2d(net, num_classes, [1, 1],
                                       activation_fn=None,
                                       normalizer_fn=None,
