@@ -4,6 +4,19 @@ from multiprocessing import Process
 
 import numpy as np
 import tensorflow as tf
+
+try:
+    import memory_saving_gradients
+
+    tf.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+    # tf.__dict__["gradients"] = memory_saving_gradients.gradients_speed
+    print("Use memory_saving_gradients reduce net memory usage for cost of speed. "
+          "See https://github.com/openai/gradient-checkpointing.")
+except ImportError:
+    print("To fit bigger nets into memory get https://github.com/openai/gradient-checkpointing "
+          "and put it in your Pythonpath.")
+    pass
+
 import tensorflow.contrib.slim as slim
 
 from . import util
@@ -174,7 +187,7 @@ class Trainer():
         assert (max_iter - start_iter + 1) % save_interval == 0
         for i in range(start_iter, max_iter + 1, save_interval):
             self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            #self.eval(1)
+            # self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
