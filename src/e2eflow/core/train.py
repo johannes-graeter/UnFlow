@@ -1,32 +1,45 @@
 import os
 import re
-import numpy as np
 from multiprocessing import Process
-#from matplotlib.pyplot import plot, show
 
+import numpy as np
 import tensorflow as tf
-from tensorflow.python.client import timeline
+
+try:
+    import memory_saving_gradients
+
+    tf.__dict__["gradients"] = memory_saving_gradients.gradients_memory
+    # tf.__dict__["gradients"] = memory_saving_gradients.gradients_speed
+    print("Use memory_saving_gradients reduce net memory usage for cost of speed. "
+          "See https://github.com/openai/gradient-checkpointing.")
+except ImportError:
+    print("To fit bigger nets into memory get https://github.com/openai/gradient-checkpointing "
+          "and put it in your Pythonpath.")
+    pass
+
 import tensorflow.contrib.slim as slim
 
 from . import util
-from ..ops import forward_warp
-from .image_warp import image_warp
-from .unsupervised import unsupervised_loss
-from .supervised import supervised_loss
-from .losses import occlusion, DISOCC_THRESH, create_outgoing_mask
 from .flow_util import flow_error_avg, flow_to_color, flow_error_image, outlier_pct
-from ..gui import display
-from .util import summarized_placeholder
+from .image_warp import image_warp
 from .input import resize_input, resize_output_crop, resize_output, resize_output_flow
+from .losses import occlusion, DISOCC_THRESH, create_outgoing_mask
+from .supervised import supervised_loss
+from .unsupervised import unsupervised_loss
+from .util import add_to_debug_output
+from .util import summarized_placeholder
+from ..gui import display
+from ..ops import forward_warp
 
 
 def restore_networks(sess, params, ckpt, ckpt_path=None):
+    # Attention this is converted to checkpoints in e2eflow/util.py::convert_input_strings
     finetune = params.get('finetune', [])
     train_all = params.get('train_all', None)
     spec = params.get('flownet', 'S')
     flownet_num = len(spec)
 
-    net_names = ['flownet_c'] + ['stack_{}_flownet'.format(i+1) for i in range(flownet_num - 1)]
+    net_names = ['flownet_c'] + ['stack_{}_flownet'.format(i + 1) for i in range(flownet_num - 1)] + ['funnet']
     assert len(finetune) <= flownet_num
     # Save all trained networks, restore all networks which are kept fixed
     if train_all:
@@ -34,7 +47,7 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
         variables_to_save = slim.get_variables_to_restore(include=net_names)
     else:
         restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
-        variables_to_save = slim.get_variables_to_restore(include=[net_names[-1]])
+        variables_to_save = slim.get_variables_to_restore(include=net_names[-2:])
 
     saver = tf.train.Saver(variables_to_save, max_to_keep=1000)
 
@@ -72,6 +85,33 @@ def _add_loss_summaries():
         tf.summary.scalar(tensor_name, l)
 
 
+def _add_variable_summaries():
+    ms = tf.get_collection('motion_angles')
+    assert (len(ms) == 1)
+    batch_size, var_length = ms[0].shape.as_list()
+    for i in range(batch_size):
+        for j in range(var_length):
+            tensor_names = "motion_angles/batch{}/motion{}".format(i, j)
+            tf.summary.scalar(tensor_names, ms[0][i, j])
+
+    # train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+
+    def add_weights(layer_name):
+        conv5_vars = tf.get_default_graph().get_tensor_by_name('funnet/alexnet_v2/{}/weights:0'.format(layer_name))
+        add_to_debug_output('debug/{}/weights'.format(layer_name), conv5_vars)
+
+        # for n in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5']:
+        # add_weights(n)
+        # act = tf.get_collection('funnet/alexnet_v2/fc8')
+        # print(act)
+        # bs, a, b, c = act[0].shape.as_list()
+        # act = tf.reshape(act, (bs, a * b * c))
+        # for i in range(batch_size):
+        #     for j in range(a * b * c):
+        #         tensor_names = "motion_angles/batch{}/activation{}".format(i, j)
+        #         tf.summary.scalar(tensor_names, act[i, j])
+
+
 def _add_param_summaries():
     params = tf.get_collection('params')
     for p in params:
@@ -86,8 +126,16 @@ def _add_image_summaries():
         tf.summary.image(tensor_name, im)
 
 
+def _add_debug_tensor_summaries():
+    ts = tf.get_collection('debug_tensors')
+    for t in ts:
+        name = re.sub('tower_[0-9]*/', '', t.op.name)
+        tf.summary.scalar(name + '/mean', tf.reduce_mean(t))
+        tf.summary.scalar(name + '/max', tf.reduce_max(t))
+        tf.summary.scalar(name + '/min', tf.reduce_min(t))
+
+
 def _eval_plot(results, image_names, title):
-    import matplotlib.pyplot as plt
     display(results, image_names, title)
 
 
@@ -139,7 +187,7 @@ class Trainer():
         assert (max_iter - start_iter + 1) % save_interval == 0
         for i in range(start_iter, max_iter + 1, save_interval):
             self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            self.eval(1)
+            #self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
@@ -150,15 +198,23 @@ class Trainer():
         else:
             opt = tf.train.AdamOptimizer(beta1=0.9, beta2=0.999,
                                          learning_rate=learning_rate)
+
         def _add_summaries():
             _add_loss_summaries()
             _add_param_summaries()
+            _add_variable_summaries()
             if self.debug:
                 _add_image_summaries()
+                _add_debug_tensor_summaries()
 
         if len(self.devices) == 1:
             loss_ = self.loss_fn(batch, self.params, self.normalization)
-            train_op = opt.minimize(loss_)
+            if self.params.get('train_motion_only'):
+                scope = "funnet"
+            else:
+                scope = None
+            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope)
+            train_op = opt.minimize(loss_, var_list=train_vars)
             _add_summaries()
         else:
             tower_grads = []
@@ -185,7 +241,6 @@ class Trainer():
         return train_op, loss_
 
     def train(self, start_iter, max_iter, iter_offset):
-        print('-- training from iteration {} to {} with offset {}'.format(start_iter, max_iter, iter_offset))
         ckpt = tf.train.get_checkpoint_state(self.ckpt_dir)
 
         with tf.Graph().as_default(), tf.device(self.shared_device):
@@ -207,8 +262,10 @@ class Trainer():
             with tf.Session(config=sess_config) as sess:
                 if self.debug:
                     summary_writer = tf.summary.FileWriter(self.train_summaries_dir,
-                                                            sess.graph)
-                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+                                                           sess.graph)
+                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE,
+                                                report_tensor_allocations_upon_oom=True)
+                    # run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
                     run_metadata = tf.RunMetadata()
                 else:
                     summary_writer = tf.summary.FileWriter(self.train_summaries_dir)
@@ -221,7 +278,7 @@ class Trainer():
                 threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
                 for local_i, i in enumerate(range(start_iter, max_iter + 1)):
-                    #if INTERACTIVE_PLOT:
+                    # if INTERACTIVE_PLOT:
                     #    plt.title = "{} ({})".format(self.experiment, i)
                     decay_iters = local_i + iter_offset
                     if 'manual_decay_lrs' in self.params \
@@ -245,25 +302,18 @@ class Trainer():
                             learning_rate = self.params['learning_rate']
 
                     feed_dict = {learning_rate_: learning_rate, global_step_: i}
-                    try:
-                        _, loss = sess.run(
-                            [train_op, loss_],
-                            feed_dict=feed_dict,
-                            options=run_options,
-                            run_metadata=run_metadata)
+                    _, loss = sess.run(
+                        [train_op, loss_],
+                        feed_dict=feed_dict,
+                        options=run_options,
+                        run_metadata=run_metadata)
 
-                        if i == 1 or i % self.params['display_interval'] == 0:
-                            summary = sess.run(summary_, feed_dict=feed_dict)
-                            summary_writer.add_summary(summary, i)
-                            print("-- train: i = {}, loss = {}".format(i, loss))
+                    if i == 1 or i % self.params['display_interval'] == 0:
+                        summary = sess.run(summary_, feed_dict=feed_dict)
+                        summary_writer.add_summary(summary, i)
+                        print("-- train: i = {}, loss = {}".format(i, loss))
 
-                    except tf.errors.OutOfRangeError:
-                        print("tf.errors.OutOfRangeError was thrown in sess.run() at iteration {}. "
-                              "Probably end of queue! "
-                              "Close current session and continue with next set of iterations".format(i))
-                        break
-
-                save_path =  os.path.join(self.ckpt_dir, 'model.ckpt')
+                save_path = os.path.join(self.ckpt_dir, 'model.ckpt')
                 saver.save(sess, save_path, global_step=max_iter)
 
                 summary_writer.close()
@@ -271,7 +321,7 @@ class Trainer():
                 coord.join(threads)
 
     def eval(self, num):
-        assert num == 1 # TODO enable num > 1
+        assert num == 1  # TODO enable num > 1
 
         with tf.Graph().as_default():
             inputs = self.eval_batch_fn()
@@ -297,7 +347,7 @@ class Trainer():
 
             images_ = [image_warp(im1, flow) / 255,
                        flow_to_color(flow),
-                       1 - (1 - occlusion(flow, flow_bw)[0]) * create_outgoing_mask(flow) ,
+                       1 - (1 - occlusion(flow, flow_bw)[0]) * create_outgoing_mask(flow),
                        forward_warp(flow_bw) < DISOCC_THRESH]
             image_names = ['warped image', 'flow', 'occ', 'reverse disocc']
 
