@@ -31,11 +31,11 @@ def main(argv=None):
     if FLAGS.dataset == 'kitti':
         data = KITTIData(dirs['data'], development=True)
         data_input = KITTIInput(data, batch_size=1, normalize=False,
-                                #dims=(320, 1152))
+                                # dims=(320, 1152))
                                 dims=(384, 1280))
 
     input_fn0 = getattr(data_input, 'input_raw')
-    input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None)
+    input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False)
 
     results = []
     for name in FLAGS.ex.split(','):
@@ -43,7 +43,7 @@ def main(argv=None):
         # This should be sequences.
         display_images, image_names, flows = eval_gui._evaluate_experiment(name, input_fn, data_input)
 
-        #tracked_points = track_points(flows[0], display_images[-1])
+        # tracked_points = track_points(flows[0], display_images[-1])
         # motion_top_view = draw_motion(motion)
         results.append(display_images)
 
