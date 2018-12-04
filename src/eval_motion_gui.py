@@ -35,7 +35,7 @@ def main(argv=None):
                                 dims=(384, 1280))
 
     input_fn0 = getattr(data_input, 'input_raw')
-    input_fn = lambda: input_fn0(needs_crop=False, seed=None)
+    input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None)
 
     results = []
     for name in FLAGS.ex.split(','):

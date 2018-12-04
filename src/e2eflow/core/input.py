@@ -191,11 +191,11 @@ class Input():
             shape_before_preproc = tf.shape(image_1)
 
             if needs_crop:
-                #if center_crop:
-                #    image_1 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
-                #    image_2 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
-                #else:
-                image_1, image_2 = random_crop([image_1, image_2], [height, width, 3])
+                if center_crop:
+                    image_1 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
+                    image_2 = tf.image.resize_image_with_crop_or_pad(image_2, height, width)
+                else:
+                    image_1, image_2 = random_crop([image_1, image_2], [height, width, 3])
             else:
                 image_1 = tf.reshape(image_1, [height, width, 3])
                 image_2 = tf.reshape(image_2, [height, width, 3])
