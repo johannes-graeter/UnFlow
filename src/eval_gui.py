@@ -175,7 +175,8 @@ def _evaluate_experiment(name, input_fn, data_input):
                            #(div > 5, 'pos div'),
                            #(flow_to_color(flow_occ, mask_occ), 'flow truth'),
                            (flow_error_image(flow, flow_occ, mask_occ, mask_noc),
-                            'flow error') #  (blue: correct, red: wrong, dark: occluded)
+                            'flow error'), #  (blue: correct, red: wrong, dark: occluded)
+                           (im1, 'im1'),
             ]
 
             # list of (scalar_op, title)
@@ -192,6 +193,7 @@ def _evaluate_experiment(name, input_fn, data_input):
                            (im1_diff / 255, 'brightness error'),
                            (flow_to_color(flow), 'flow'),
                            (flow_to_color(flow_gt, mask), 'gt'),
+                           (im1, 'im1'),
             ]
 
             # list of (scalar_op, title)
@@ -202,7 +204,9 @@ def _evaluate_experiment(name, input_fn, data_input):
                            (im1_diff / 255, 'warp error'),
                            #(im2 / 255, 'second image', 1, 0),
                            #(im2_diff / 255, '|first - second|', 1, 2),
-                           (flow_to_color(flow), 'flow prediction')]
+                           (flow_to_color(flow), 'flow prediction'),
+                           (im1, 'im1')
+            ]
             scalar_slots = []
 
         num_ims = len(image_slots)
@@ -237,10 +241,14 @@ def _evaluate_experiment(name, input_fn, data_input):
             # TODO adjust for batch_size > 1 (also need to change image_lists appending)
             max_iter = FLAGS.num if FLAGS.num > 0 else None
 
+            # JG: return flow
+            flows = []
             try:
                 num_iters = 0
                 while not coord.should_stop() and (max_iter is None or num_iters != max_iter):
                     all_results = sess.run([flow, flow_bw, flow_fw_int16, flow_bw_int16] + all_ops)
+                    # JG: get flow
+                    flows.append(all_results[0])
                     flow_fw_res, flow_bw_res, flow_fw_int16_res, flow_bw_int16_res = all_results[:4]
                     all_results = all_results[4:]
                     image_results = all_results[:num_ims]
@@ -285,7 +293,7 @@ def _evaluate_experiment(name, input_fn, data_input):
         _, scalar_name = t
         print("({}) {} = {}".format(name, scalar_name, avg))
 
-    return image_lists, image_names
+    return image_lists, image_names, flows
 
 
 def main(argv=None):
@@ -327,7 +335,7 @@ def main(argv=None):
 
     results = []
     for name in FLAGS.ex.split(','):
-        result, image_names = _evaluate_experiment(name, input_fn, data_input)
+        result, image_names, _ = _evaluate_experiment(name, input_fn, data_input)
         results.append(result)
 
     display(results, image_names)
