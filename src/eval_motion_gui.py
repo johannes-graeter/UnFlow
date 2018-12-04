@@ -10,6 +10,8 @@ from e2eflow.util import config_dict
 
 FLAGS = eval_gui.FLAGS
 
+def track_points(flow, image):
+    pass
 
 def draw_tracked_points(flow1, image1):
     raise Exception("Implement")
@@ -38,12 +40,15 @@ def main(argv=None):
     input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False)
 
     results = []
+    from matplotlib import pyplot as plt
+
     for name in FLAGS.ex.split(','):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
         display_images, image_names, flows = eval_gui._evaluate_experiment(name, input_fn, data_input)
-
-        # tracked_points = track_points(flows[0], display_images[-1])
+        #plt.imshow(flows[0])
+        print(flows[0].shape.as_list(), display_images[-1].shape.as_list())
+        tracked_points = track_points(flows[0], display_images[-1])
         # motion_top_view = draw_motion(motion)
         results.append(display_images)
 
