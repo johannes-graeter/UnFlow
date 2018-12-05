@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 
 
-def track_points(flows, images):
+def track_points(flows, first_image):
     """
     Track points in an image sequence as in the KLT tracker but with learned flow.
     :param flows: estimated flow, shape(sequ_length,height,width,2)
@@ -30,7 +30,7 @@ def track_points(flows, images):
                           minDistance=7,
                           blockSize=7)
     # Points has shape (num_features, 1, 2)
-    points = cv2.goodFeaturesToTrack(cv2.cvtColor(images[0, :, :, :], cv2.COLOR_RGB2GRAY), mask=None, **feature_params)
+    points = cv2.goodFeaturesToTrack(cv2.cvtColor(first_image, cv2.COLOR_RGB2GRAY), mask=None, **feature_params)
     points = np.squeeze(np.array(points))  # shape (num_features,2)
 
     out = [points]
@@ -38,27 +38,35 @@ def track_points(flows, images):
     for flow in flows:
         dudv = []
         for u, v in points.astype(int):
-            du, dv = flow[v, u]
+            du = 0
+            dv = 0
+            if 0 < u < first_image.shape[1] and 0 < v < first_image.shape[0]:
+                du, dv = flow[v, u]
             dudv.append((du, dv))
         dudv = np.array(dudv)
-        points = points - dudv
+        points = points + dudv
         out.append(points)
         # print(points)
 
     return out
 
 
-def draw_tracked_points(tracked_points, image1):
-    colors = np.random.randint(0, 255, (len(tracked_points[0]), 3))
+def draw_tracked_points(tracked_points, images):
+    max_num_points = max([len(tp) for tp in tracked_points])
+    colors = np.random.randint(0, 255, (max_num_points, 3))
+
+    if not images.dtype == int:
+        colors = colors / 255.
     # draw the tracks
-    mask = np.zeros_like(image1)
+    output = images.copy()
+    mask = np.zeros_like(images[0])
     for i in range(1, len(tracked_points) - 1):
         concat = np.concatenate((tracked_points[i - 1], tracked_points[i]), axis=1)
-        for num, (u_last, v_last, u, v) in enumerate(concat):
-            mask = cv2.line(mask, (u_last, v_last), (u, v), colors[num].tolist(), 1)
-            image1 = cv2.circle(image1, (u, v), 1, colors[num].tolist(), -1)
-    img = cv2.add(image1, mask)
-    return img
+        for num, (u_last, v_last, u, v) in enumerate(concat.astype(int)):
+            mask = cv2.line(mask, (u_last, v_last), (u, v), colors[num, :].tolist(), 2)
+            output[i] = cv2.circle(output[i], (u, v), 4, colors[num, :].tolist(), 2)
+        output[i] = cv2.add(output[i], mask)
+    return output
 
 
 def draw_motion(motion):
@@ -94,20 +102,18 @@ def main(argv=None):
         flows = np.squeeze(np.array(flows), axis=1)
 
         # Get first images for corner extraction.
-        imgs = np.squeeze(np.array(display_images[-1]), axis=1)
+        imgs = np.squeeze(np.array(display_images), axis=2)
+        first_imgs = imgs[:, -1, :, :]
 
-        tracked_points = track_points(flows, imgs)
-        img = draw_tracked_points(tracked_points, imgs[0, :, :])
+        tracked_points = track_points(flows, first_imgs[0, :, :, :])
+        track_imgs = draw_tracked_points(tracked_points, first_imgs)
+        imgs[:, -1, :, :] = track_imgs
 
+        imgs = np.expand_dims(imgs, axis=2)
 
-        # Todo: integrate in gui
-        from matplotlib import pyplot as plt
-        plt.imshow(img)
-        display_images.extend(img)
+        image_names[-1] = "tracklets"
 
-        image_names.extend("tracklets")
-
-        results.append(display_images)
+        results.append(imgs)
 
     display(results, image_names)
 
