@@ -59,12 +59,8 @@ def get_cross_mat(t):
     return cross_t
 
 
-def get_fundamental_matrix(angles, intrin):
-    """
-    :param angles: shape(batch_size,5) roll, pitch, yaw, trans_yaw, trans_pitch
-    :param intrin: matrix with intrinsics as constant with shape (3,3)
-    :return: fundamental matrices, shape (batch_size,3,3)
-    """
+def get_translation_rotation(angles):
+    """transform from rpy, trans_yaw, trans_pitch to translation and rotation matrices"""
     batch_size, five = angles.shape.as_list()
 
     assert (five == 5)
@@ -77,14 +73,26 @@ def get_fundamental_matrix(angles, intrin):
     t = tf.matmul(get_rotation(angles[:, 3], axis=1), t)
     # Apply translation pitch (camera coordinates!)
     t = tf.matmul(get_rotation(angles[:, 4], axis=0), t)
-    # Get cross matrix
-    cross_t = get_cross_mat(t)
 
     # Rotation definition as in here http://planning.cs.uiuc.edu/node102.html
     roll = get_rotation(angles[:, 0], axis=2)
     pitch = get_rotation(angles[:, 1], axis=0)
     yaw = get_rotation(angles[:, 2], axis=1)
     rotation = tf.matmul(yaw, tf.matmul(pitch, roll))
+
+    return t, rotation
+
+
+def get_fundamental_matrix(angles, intrin):
+    """
+    :param angles: shape(batch_size,5) roll, pitch, yaw, trans_yaw, trans_pitch
+    :param intrin: matrix with intrinsics as constant with shape (3,3)
+    :return: fundamental matrices, shape (batch_size,3,3)
+    """
+    t, rotation = get_translation_rotation(angles)
+
+    # Get cross matrix
+    cross_t = get_cross_mat(t)
 
     # Calculate Essential Matrix as in multiple view geometry p.257
     # should have hape (batch_size,3,3)

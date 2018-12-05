@@ -25,7 +25,7 @@ def _track_image(op, name):
 def unsupervised_loss(batch, params, normalization=None, augment=True,
                       return_flow=False):
     channel_mean = tf.constant(normalization[0]) / 255.0
-    im1, im2 = batch
+    im1, im2, _ = batch
     im1 = im1 / 255.0
     im2 = im2 / 255.0
     im_shape = tf.shape(im1)[1:3]

@@ -164,8 +164,9 @@ class Input():
                     fn2 = os.path.join(dir_path, files[i + 1])
                     filenames.append((fn1, fn2))
 
-        random.seed(seed)
-        random.shuffle(filenames)
+        if seed:
+            random.seed(seed)
+            random.shuffle(filenames)
         print("Training on {} frame pairs.".format(len(filenames)))
 
         filenames_extended = []
@@ -185,6 +186,8 @@ class Input():
             image_1 = read_png_image(filenames_1)
             image_2 = read_png_image(filenames_2)
 
+            shape_before_preproc = tf.shape(image_1)
+
             if needs_crop:
                 if center_crop:
                     image_1 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
@@ -200,7 +203,7 @@ class Input():
                 image_2 = self._normalize_image(image_2)
 
             return tf.train.batch(
-                [image_1, image_2],
+                [image_1, image_2, shape_before_preproc],
                 batch_size=self.batch_size,
                 num_threads=self.num_threads)
 
