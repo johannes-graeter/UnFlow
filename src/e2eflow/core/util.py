@@ -89,6 +89,8 @@ def get_fundamental_matrix(angles, intrin):
     :param intrin: matrix with intrinsics as constant with shape (3,3)
     :return: fundamental matrices, shape (batch_size,3,3)
     """
+    batch_size, five = angles.shape.as_list()
+
     t, rotation = get_translation_rotation(angles)
 
     # Get cross matrix
