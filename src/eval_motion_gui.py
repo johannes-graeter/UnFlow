@@ -13,6 +13,8 @@ FLAGS = eval_gui.FLAGS
 import cv2
 import numpy as np
 
+from e2eflow.core.util import get_translation_rotation
+
 
 def track_points(flows, first_image):
     """
@@ -69,8 +71,41 @@ def draw_tracked_points(tracked_points, images):
     return output
 
 
-def draw_motion(motion):
-    raise Exception("Implement")
+def to_affine(motion_angles):
+    """transform from rpy, trans_yaw, trans_pitch to affine transform"""
+    ts, rots = get_translation_rotation(motion_angles)
+    assert (ts.shape[0] == rots.shape[0])
+    batch_size = ts.shape[0]
+    out = np.zeros((batch_size, 4, 4))
+    for i in range(batch_size):
+        out[i, :3, :3] = rots[i, :, :]
+        out[i, :3, 3] = ts[i, :]
+        out[i, 3, 3] = 1.
+    return out
+
+
+def accumulate_motion(motions):
+    accumulator = np.eye(4)
+
+    out = [accumulator]
+    for m in motions:
+        out.append(accumulator.dot(to_affine(m)))
+
+    return out
+
+
+def draw_trajectory(acc_motion, res=(200, 200)):
+    img = np.ones((acc_motion.shape[0], res[0], res[1]))
+    out = []
+    for m in acc_motion:
+        p = (m[0, 3], -m[2, 3])
+        img = cv2.circle(img, p, 4, (0., 0., 0.), 2)
+        dir = m.dot(np.array([0., 0., 1., 1.]))
+        p2 = (dir[0, 3], -dir[2, 3])
+        img = cv2.line(img, p, p2, (1.,0.,0.),2)
+        out.append(img)
+
+    return out
 
 
 def main(argv=None):
@@ -98,20 +133,25 @@ def main(argv=None):
         # This should be sequences.
         display_images, image_names, flows = eval_gui._evaluate_experiment(name, input_fn, data_input)
 
-        # Get flow for tracking features.
+        # Draw image with tracked features.
         flows = np.squeeze(np.array(flows), axis=1)
-
-        # Get first images for corner extraction.
         imgs = np.squeeze(np.array(display_images), axis=2)
         first_imgs = imgs[:, -1, :, :]
-
         tracked_points = track_points(flows, first_imgs[0, :, :, :])
         track_imgs = draw_tracked_points(tracked_points, first_imgs)
         imgs[:, -1, :, :] = track_imgs
-
         imgs = np.expand_dims(imgs, axis=2)
-
         image_names[-1] = "tracklets"
+
+        # Accumulate and draw motion
+        # Make dummy motion
+        motions = np.zeros((flows.shape[0], 5))
+        motions[:, 2] = 0.05
+
+        traj_imgs = draw_trajectory(accumulate_motion(motions))
+        for img in traj_imgs:
+            cv2.imshow("traj", img)
+            cv2.waitKey(0)
 
         results.append(imgs)
 
