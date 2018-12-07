@@ -41,7 +41,7 @@ def frame_name_to_num(name):
     return int(stripped)
 
 
-class Input():
+class Input:
     mean = [104.920005, 110.1753, 114.785955]
     stddev = 1 / 0.0039216
 

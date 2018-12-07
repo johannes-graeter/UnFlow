@@ -210,11 +210,10 @@ def main(argv=None):
     input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False)
 
     results = []
-    import numpy as np
     for name in FLAGS.ex.split(','):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
-        display_images, image_names, flows = eval_gui._evaluate_experiment(name, input_fn, data_input)
+        display_images, image_names, flows = eval_gui._evaluate_experiment(name, input_fn, data_input, do_resize=False)
 
         flows = np.squeeze(np.array(flows), axis=1)
         imgs = np.array(display_images)

@@ -91,7 +91,7 @@ def write_flo(flow, filename):
     f.close()
 
 
-def _evaluate_experiment(name, input_fn, data_input):
+def _evaluate_experiment(name, input_fn, data_input, do_resize=True):
     normalize_fn = data_input._normalize_image
     resized_h = data_input.dims[0]
     resized_w = data_input.dims[1]
@@ -121,18 +121,20 @@ def _evaluate_experiment(name, input_fn, data_input):
 
         height, width, _ = tf.unstack(tf.squeeze(input_shape), num=3, axis=0)
 
-        im1 = resize_input(im1, height, width, resized_h, resized_w)
-        im2 = resize_input(im2, height, width, resized_h, resized_w)  # TODO adapt train.py
+        if do_resize:
+            im1 = resize_input(im1, height, width, resized_h, resized_w)
+            im2 = resize_input(im2, height, width, resized_h, resized_w)  # TODO adapt train.py
 
         _, flow, flow_bw = unsupervised_loss(
             (im1, im2, input_shape),
             normalization=data_input.get_normalization(),
             params=params, augment=False, return_flow=True)
 
-        im1 = resize_output(im1, height, width, 3)
-        im2 = resize_output(im2, height, width, 3)
-        flow = resize_output_flow(flow, height, width, 2)
-        flow_bw = resize_output_flow(flow_bw, height, width, 2)
+        if do_resize:
+            im1 = resize_output(im1, height, width, 3)
+            im2 = resize_output(im2, height, width, 3)
+            flow = resize_output_flow(flow, height, width, 2)
+            flow_bw = resize_output_flow(flow_bw, height, width, 2)
 
         flow_fw_int16 = flow_to_int16(flow)
         flow_bw_int16 = flow_to_int16(flow_bw)

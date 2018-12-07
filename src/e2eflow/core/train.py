@@ -39,15 +39,20 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
     spec = params.get('flownet', 'S')
     flownet_num = len(spec)
 
-    net_names = ['flownet_c'] + ['stack_{}_flownet'.format(i + 1) for i in range(flownet_num - 1)] + ['funnet']
+    net_names = ['flownet_c'] + ['stack_{}_flownet'.format(i + 1) for i in range(flownet_num - 1)]
+    if params.get('has_motion', True):
+        net_names = net_names + ['funnet']
+
     assert len(finetune) <= flownet_num + 1
     # Save all trained networks, restore all networks which are kept fixed
     if train_all:
         restore_external_nets = finetune if ckpt is None else []
         variables_to_save = slim.get_variables_to_restore(include=net_names)
     else:
-        restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
-        variables_to_save = slim.get_variables_to_restore(include=net_names[-2:])
+        if params.get('has_motion', True):
+            restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
+        if params.get('has_motion', True):
+            variables_to_save = slim.get_variables_to_restore(include=net_names[-2:])
     saver = tf.train.Saver(variables_to_save, max_to_keep=1000)
 
     sess.run(tf.global_variables_initializer())
