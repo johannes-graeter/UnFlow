@@ -165,7 +165,7 @@ def main(argv=None):
         imgs[:, -1, :, :] = track_imgs
         imgs = np.expand_dims(imgs, axis=2)
         image_names[-1] = "tracklets"
-
+        type(image_names)
         # Accumulate and draw motion
         # Make dummy motion
         motions = np.zeros((len(flows), 5))
@@ -174,9 +174,8 @@ def main(argv=None):
 
         print(motions)
         traj_imgs = draw_trajectory(np.array(accumulate_motion(motions)))
-        for img in traj_imgs:
-            cv2.imshow("traj", img)
-            cv2.waitKey(0)
+        traj_imgs = np.array(traj_imgs)
+
 
         results.append(imgs)
 
