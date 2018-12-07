@@ -93,11 +93,11 @@ def accumulate_motion(motions):
     out = [accumulator]
     for m in to_affine(motions):
         out.append(out[-1].dot(m))
-
+    out.pop(0)
     return out
 
 
-def draw_trajectory(acc_motion):
+def draw_trajectory(acc_motion, min_res=(300, 300)):
     from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
     from matplotlib.figure import Figure
     from matplotlib import pyplot as plt
@@ -126,9 +126,67 @@ def draw_trajectory(acc_motion):
 
         canvas.draw()  # draw the canvas, cache the renderer
         img = np.fromstring(canvas.tostring_rgb(), dtype='uint8').reshape((width, height, 3))
+        img = cv2.resize(img, dsize=min_res)
+        img = img / 255.
         out.append(img)
 
     return out
+
+
+def resize_with_pad(image, height, width, pad_color=(0., 0., 0.)):
+    def get_padding_size(image):
+        h, w, _ = image.shape
+        longest_edge = max(h, w)
+        top, bottom, left, right = (0, 0, 0, 0)
+        if h < longest_edge:
+            dh = longest_edge - h
+            top = dh // 2
+            bottom = dh - top
+        elif w < longest_edge:
+            dw = longest_edge - w
+            left = dw // 2
+            right = dw - left
+        else:
+            pass
+        return top, bottom, left, right
+
+    top, bottom, left, right = get_padding_size(image)
+    constant = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=pad_color)
+
+    resized_image = cv2.resize(constant, (height, width))
+
+    return resized_image
+
+
+def add_motion_to_display(imgs, motions):
+    height1 = imgs.shape[3]
+    width1 = imgs.shape[4]
+    traj_imgs = np.array(
+        draw_trajectory(np.array(accumulate_motion(motions)), min_res=(height1, height1)))
+    s = list(imgs.shape)
+    s[1] = 1
+    imgs = np.concatenate((imgs, np.ones(s, dtype=float)), axis=1)
+    height0 = traj_imgs.shape[1]
+    width0 = traj_imgs.shape[2]
+
+    dh = (height1 - height0) // 2
+    dw = (width1 - width0) // 2
+    assert (dh >= 0 and dw >= 0)
+
+    traj_imgs = np.expand_dims(traj_imgs, axis=1)
+
+    imgs[:, -1, :, dh:height0 + dh, dw:width0 + dw] = traj_imgs
+
+    return imgs
+
+
+def add_flow_to_display(imgs, flows):
+    first_imgs = imgs[:, -1, 0, :, :]
+    tracked_points = track_points(flows, first_imgs[0, :, :, :])
+    track_imgs = draw_tracked_points(tracked_points, first_imgs)
+    imgs[:, -1, 0, :, :] = track_imgs
+
+    return imgs
 
 
 def main(argv=None):
@@ -140,10 +198,12 @@ def main(argv=None):
     default_config = config_dict()
     dirs = default_config['dirs']
 
+    input_dims = (320, 1152)
+
     if FLAGS.dataset == 'kitti':
         data = KITTIData(dirs['data'], development=True)
         data_input = KITTIInput(data, batch_size=1, normalize=False,
-                                dims=(320, 1152))
+                                dims=input_dims)
         # dims=(384, 1280))
 
     input_fn0 = getattr(data_input, 'input_raw')
@@ -156,26 +216,21 @@ def main(argv=None):
         # This should be sequences.
         display_images, image_names, flows = eval_gui._evaluate_experiment(name, input_fn, data_input)
 
-        # Draw image with tracked features.
         flows = np.squeeze(np.array(flows), axis=1)
-        imgs = np.squeeze(np.array(display_images), axis=2)
-        first_imgs = imgs[:, -1, :, :]
-        tracked_points = track_points(flows, first_imgs[0, :, :, :])
-        track_imgs = draw_tracked_points(tracked_points, first_imgs)
-        imgs[:, -1, :, :] = track_imgs
-        imgs = np.expand_dims(imgs, axis=2)
+        imgs = np.array(display_images)
+
+        # Draw image with tracked features.
+        imgs = add_flow_to_display(imgs, flows)
         image_names[-1] = "tracklets"
-        type(image_names)
-        # Accumulate and draw motion
+
         # Make dummy motion
         motions = np.zeros((len(flows), 5))
         for i in range(len(flows)):
             motions[i, 2] = i * 0.1
 
-        print(motions)
-        traj_imgs = draw_trajectory(np.array(accumulate_motion(motions)))
-        traj_imgs = np.array(traj_imgs)
-
+        # Accumulate and draw motion
+        imgs = add_motion_to_display(imgs, motions)
+        image_names.append("motion")
 
         results.append(imgs)
 
