@@ -10,12 +10,12 @@ import numpy as np
 import matplotlib.image as mpimg
 
 
-class Data():
+class Data:
     # Should be a list containing all subdirectories of the main data dir which
     # belong to this dataset
     dirs = None
 
-    def __init__(self, data_dir, stat_log_dir,
+    def __init__(self, data_dir, stat_log_dir, do_fetch=True,
                  development=True, fast_dir=None):
         self.development = development
         self.data_dir = data_dir
@@ -23,7 +23,8 @@ class Data():
         if not os.path.isdir(data_dir):
             os.makedirs(data_dir)
 
-        self._fetch_if_missing()
+        if do_fetch:
+            self._fetch_if_missing()
 
         self.fast_dir = fast_dir
         if fast_dir:

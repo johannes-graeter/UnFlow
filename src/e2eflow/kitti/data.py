@@ -1,13 +1,9 @@
 import os
-import sys
-
-import numpy as np
-import matplotlib.image as mpimg
 
 from . import raw_records
 from ..core.data import Data
-from ..util import tryremove
 from ..core.input import frame_name_to_num
+from ..util import tryremove
 
 
 def exclude_test_and_train_images(kitti_dir, exclude_lists_dir, exclude_target_dir,
@@ -72,7 +68,7 @@ def exclude_test_and_train_images(kitti_dir, exclude_lists_dir, exclude_target_d
                 os.remove(src)
             else:
                 os.rename(src, dst)
-        except: # Some ranges may overlap
+        except:  # Some ranges may overlap
             pass
 
     return len(to_move)
@@ -85,11 +81,12 @@ class KITTIData(Data):
 
     dirs = ['data_stereo_flow', 'data_scene_flow', 'kitti_raw']
 
-    def __init__(self, data_dir, stat_log_dir=None,
+    def __init__(self, data_dir, stat_log_dir=None, do_fetch=True,
                  development=True, fast_dir=None):
-        super().__init__(data_dir, stat_log_dir,
+        super().__init__(data_dir, stat_log_dir, do_fetch=do_fetch,
                          development=development,
                          fast_dir=fast_dir)
+        self.calib_paths = {}
 
     def _fetch_if_missing(self):
         self._maybe_get_kitti_raw()
@@ -97,18 +94,33 @@ class KITTIData(Data):
         self._maybe_get_kitti_2015()
 
     def get_raw_dirs(self):
-       top_dir = os.path.join(self.current_dir, 'kitti_raw')
-       dirs = []
-       dates = os.listdir(top_dir)
-       for date in dates:
-           date_path = os.path.join(top_dir, date)
-           extracts = os.listdir(date_path)
-           for extract in extracts:
-               extract_path = os.path.join(date_path, extract)
-               image_02_folder = os.path.join(extract_path, 'image_02/data')
-               image_03_folder = os.path.join(extract_path, 'image_03/data')
-               dirs.extend([image_02_folder, image_03_folder])
-       return dirs
+        top_dir = os.path.join(self.current_dir, 'kitti_raw')
+        dirs = []
+        dates = os.listdir(top_dir)
+        for date in dates:
+            date_path = os.path.join(top_dir, date)
+            extracts = os.listdir(date_path)
+            for extract in extracts:
+                extract_path = os.path.join(date_path, extract)
+                image_02_folder = os.path.join(extract_path, 'image_02/data')
+                image_03_folder = os.path.join(extract_path, 'image_03/data')
+                dirs.extend([image_02_folder, image_03_folder])
+        return dirs
+
+    def get_intrinsic_dirs(self):
+        top_dir = os.path.join(self.current_dir, 'kitti_raw')
+        dates = os.listdir(top_dir)
+        calib_paths = {}
+        for date in dates:
+            date_path = os.path.join(top_dir, date)
+            extracts = os.listdir(date_path)
+            for extract in extracts:
+                extract_path = os.path.join(date_path, extract)
+                image_02_folder = os.path.join(extract_path, 'image_02/data')
+                image_03_folder = os.path.join(extract_path, 'image_03/data')
+                calib_paths[image_02_folder] = os.path.join(date_path, "calib_cam_to_cam.txt")
+                calib_paths[image_03_folder] = os.path.join(date_path, "calib_cam_to_cam.txt")
+        return calib_paths
 
     def _maybe_get_kitti_2012(self):
         local_path = os.path.join(self.data_dir, 'data_stereo_flow')
@@ -125,7 +137,7 @@ class KITTIData(Data):
         local_dir = os.path.join(self.data_dir, 'kitti_raw')
         records = raw_records.get_kitti_records(self.development)
         downloaded_records = False
-          
+
         for i, record in enumerate(records):
             date_str = record.split("_drive_")[0]
             foldername = record + "_extract"
@@ -144,7 +156,7 @@ class KITTIData(Data):
             tryremove(os.path.join(local_path, 'oxts'))
             tryremove(os.path.join(local_path, 'image_00'))
             tryremove(os.path.join(local_path, 'image_01'))
-            
+
         if downloaded_records:
             print("Downloaded all KITTI raw files.")
             exclude_target_dir = os.path.join(self.data_dir, 'exclude_target_dir')

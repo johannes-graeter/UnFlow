@@ -41,6 +41,12 @@ def frame_name_to_num(name):
     return int(stripped)
 
 
+def parse_intrinsics(path):
+    with open(path, "r") as f:
+        mat = np.loadtxt(f)
+        print(mat)
+
+
 class Input:
     mean = [104.920005, 110.1753, 114.785955]
     stddev = 1 / 0.0039216
@@ -58,7 +64,14 @@ class Input:
 
     def _resize_crop_or_pad(self, tensor):
         height, width = self.dims
-        # return tf.image.resize_bilinear(tf.expand_dims(tensor, 0), [height, width])
+
+        _, orig_height, orig_width, _ = tensor.shape.as_list()
+        dh = (orig_height - height) / 2.
+        dw = (orig_width - width) / 2.
+
+        self.intrinsics['cu'] -= dw
+        self.intrinsics['cv'] -= dh
+
         return tf.image.resize_image_with_crop_or_pad(tensor, height, width)
 
     def _resize_image_fixed(self, image):
@@ -105,6 +118,8 @@ class Input:
         input_2 = read_png_image(filenames_2, 1)
         image_1 = self._preprocess_image(input_1)
         image_2 = self._preprocess_image(input_2)
+
+        image_1 = tf.print(image_1, [image_1.shape.as_list()])
         return tf.shape(input_1), image_1, image_2
 
     def _input_test(self, image_dir, hold_out_inv=None):
@@ -139,10 +154,13 @@ class Input:
             skip = [skip]
 
         data_dirs = self.data.get_raw_dirs()
+        intrinsic_paths = self.data.get_intrinsic_dirs()
         height, width = self.dims
 
         filenames = []
         for dir_path in data_dirs:
+            intrinsics = parse_intrinsics(intrinsic_paths[dir_path])
+
             files = os.listdir(dir_path)
             files.sort()
             if sequence:
@@ -162,7 +180,7 @@ class Input:
                             continue
                     fn1 = os.path.join(dir_path, files[i])
                     fn2 = os.path.join(dir_path, files[i + 1])
-                    filenames.append((fn1, fn2))
+                    filenames.append((fn1, fn2, intrinsics))
 
         if seed:
             random.seed(seed)
@@ -174,6 +192,7 @@ class Input:
             filenames_extended.append((fn1, fn2))
             if swap_images:
                 filenames_extended.append((fn2, fn1))
+        print("num filenames", len(filenames))
 
         shift = shift % len(filenames_extended)
         filenames_extended = list(np.roll(filenames_extended, shift))
@@ -190,8 +209,8 @@ class Input:
 
             if needs_crop:
                 if center_crop:
-                    image_1 = tf.image.resize_image_with_crop_or_pad(image_1, height, width)
-                    image_2 = tf.image.resize_image_with_crop_or_pad(image_2, height, width)
+                    image_1 = self._resize_crop_or_pad(image_1)
+                    image_2 = self._resize_crop_or_pad(image_2)
                 else:
                     image_1, image_2 = random_crop([image_1, image_2], [height, width, 3])
             else:

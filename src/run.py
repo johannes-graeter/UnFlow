@@ -44,14 +44,14 @@ def main(argv=None):
     kdata = KITTIData(data_dir=dirs['data'],
                       fast_dir=dirs.get('fast'),
                       stat_log_dir=None,
-                      development=run_config['development'])
+                      development=run_config['development'], do_fetch=False)
     einput = KITTIInput(data=kdata,
                         batch_size=1,
                         normalize=False,
                         # dims=(384, 1280)
                         )
 
-    assert(train_dataset == 'kitti')
+    assert (train_dataset == 'kitti')
     kconfig = copy.deepcopy(experiment.config['train'])
     kconfig.update(experiment.config['train_kitti'])
     convert_input_strings(kconfig, dirs)

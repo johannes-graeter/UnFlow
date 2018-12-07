@@ -336,8 +336,8 @@ class Trainer:
             truths = inputs[3:]
 
             height, width, _ = tf.unstack(tf.squeeze(input_shape), num=3, axis=0)
-            im1 = resize_input(im1, height, width, 384, 1280)
-            im2 = resize_input(im2, height, width, 384, 1280)
+            #im1 = resize_input(im1, height, width, 384, 1280)
+            #im2 = resize_input(im2, height, width, 384, 1280)
 
             _, flow, flow_bw = unsupervised_loss(
                 (im1, im2),
@@ -345,10 +345,10 @@ class Trainer:
                 normalization=self.normalization,
                 augment=False, return_flow=True)
 
-            im1 = resize_output(im1, height, width, 3)
-            im2 = resize_output(im2, height, width, 3)
-            flow = resize_output_flow(flow, height, width, 2)
-            flow_bw = resize_output_flow(flow_bw, height, width, 2)
+            #im1 = resize_output(im1, height, width, 3)
+            #im2 = resize_output(im2, height, width, 3)
+            #flow = resize_output_flow(flow, height, width, 2)
+            #flow_bw = resize_output_flow(flow_bw, height, width, 2)
 
             variables_to_restore = tf.all_variables()
 
