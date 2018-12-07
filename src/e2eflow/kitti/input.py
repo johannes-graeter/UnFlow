@@ -23,9 +23,8 @@ def _read_flow(filenames, num_epochs=None):
 
 
 class KITTIInput(Input):
-    def __init__(self, data, batch_size, dims, *,
-                 num_threads=1, normalize=True,
-                 skipped_frames=False):
+    def __init__(self, data, batch_size, *,
+                 dims=(320, 1152), num_threads=1, normalize=True, skipped_frames=False):
         super().__init__(data, batch_size, dims, num_threads=num_threads,
                          normalize=normalize, skipped_frames=skipped_frames)
 

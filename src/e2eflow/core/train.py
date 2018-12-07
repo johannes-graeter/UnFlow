@@ -49,10 +49,12 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
         restore_external_nets = finetune if ckpt is None else []
         variables_to_save = slim.get_variables_to_restore(include=net_names)
     else:
-        if params.get('has_motion', True):
-            restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
-        if params.get('has_motion', True):
+        restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
+        if params.get('epipolar_loss_weight', 0.) > 0.:
             variables_to_save = slim.get_variables_to_restore(include=net_names[-2:])
+        else:
+            variables_to_save = slim.get_variables_to_restore(include=[net_names[-1]])
+
     saver = tf.train.Saver(variables_to_save, max_to_keep=1000)
 
     sess.run(tf.global_variables_initializer())
@@ -144,7 +146,7 @@ def _eval_plot(results, image_names, title):
     display(results, image_names, title)
 
 
-class Trainer():
+class Trainer:
     def __init__(self, train_batch_fn, eval_batch_fn, params,
                  train_summaries_dir, eval_summaries_dir, ckpt_dir,
                  normalization, debug=False, experiment="", interactive_plot=False,
@@ -192,7 +194,7 @@ class Trainer():
         assert (max_iter - start_iter + 1) % save_interval == 0
         for i in range(start_iter, max_iter + 1, save_interval):
             self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            #self.eval(1)
+            self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
