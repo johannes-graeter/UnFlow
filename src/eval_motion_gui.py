@@ -73,7 +73,10 @@ def draw_tracked_points(tracked_points, images):
 
 def to_affine(motion_angles):
     """transform from rpy, trans_yaw, trans_pitch to affine transform"""
-    ts, rots = get_translation_rotation(motion_angles)
+    ts, rots = get_translation_rotation(tf.constant(motion_angles))
+    with tf.Session() as sess:
+        ts = np.squeeze(ts.eval(), axis=2)
+        rots = rots.eval()
     assert (ts.shape[0] == rots.shape[0])
     batch_size = ts.shape[0]
     out = np.zeros((batch_size, 4, 4))
@@ -88,21 +91,41 @@ def accumulate_motion(motions):
     accumulator = np.eye(4)
 
     out = [accumulator]
-    for m in motions:
-        out.append(accumulator.dot(to_affine(m)))
+    for m in to_affine(motions):
+        out.append(out[-1].dot(m))
 
     return out
 
 
-def draw_trajectory(acc_motion, res=(200, 200)):
-    img = np.ones((acc_motion.shape[0], res[0], res[1]))
+def draw_trajectory(acc_motion):
+    from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    from matplotlib import pyplot as plt
+
+    fig = Figure(figsize=(3, 3))  # size in inches: 1 inch=2.54 cm
+    canvas = FigureCanvas(fig)
+    width, height = [int(x) for x in fig.get_size_inches() * fig.get_dpi()]
+    ax = fig.gca()
+
+    # imgs = np.ones((acc_motion.shape[0], res[0], res[1], 3), dtype=float)
     out = []
     for m in acc_motion:
-        p = (m[0, 3], -m[2, 3])
-        img = cv2.circle(img, p, 4, (0., 0., 0.), 2)
-        dir = m.dot(np.array([0., 0., 1., 1.]))
-        p2 = (dir[0, 3], -dir[2, 3])
-        img = cv2.line(img, p, p2, (1.,0.,0.),2)
+        artists = []
+        p = (m[0, 3], m[2, 3])
+        artists.append(plt.Circle(p, 0.1, color='b'))
+        dir = m[:3, :3].dot(np.array([0., 0., 1.]))
+        p2 = (dir[0], dir[2])
+        artists.append(plt.Arrow(p[0], p[1], p2[0], p2[1]))
+
+        for a in artists:
+            ax.add_artist(a)
+
+        ax.axis("equal")
+        ax.set_xlim((-10., 10.))
+        ax.set_ylim((-10., 10.))
+
+        canvas.draw()  # draw the canvas, cache the renderer
+        img = np.fromstring(canvas.tostring_rgb(), dtype='uint8').reshape((width, height, 3))
         out.append(img)
 
     return out
@@ -120,8 +143,8 @@ def main(argv=None):
     if FLAGS.dataset == 'kitti':
         data = KITTIData(dirs['data'], development=True)
         data_input = KITTIInput(data, batch_size=1, normalize=False,
-                                # dims=(320, 1152))
-                                dims=(384, 1280))
+                                dims=(320, 1152))
+        # dims=(384, 1280))
 
     input_fn0 = getattr(data_input, 'input_raw')
     input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False)
@@ -145,10 +168,12 @@ def main(argv=None):
 
         # Accumulate and draw motion
         # Make dummy motion
-        motions = np.zeros((flows.shape[0], 5))
-        motions[:, 2] = 0.05
+        motions = np.zeros((len(flows), 5))
+        for i in range(len(flows)):
+            motions[i, 2] = i * 0.1
 
-        traj_imgs = draw_trajectory(accumulate_motion(motions))
+        print(motions)
+        traj_imgs = draw_trajectory(np.array(accumulate_motion(motions)))
         for img in traj_imgs:
             cv2.imshow("traj", img)
             cv2.waitKey(0)

@@ -64,7 +64,7 @@ def get_translation_rotation(angles):
     batch_size, five = angles.shape.as_list()
 
     assert (five == 5)
-    t = tf.constant([0., 0., 1.])
+    t = tf.constant([0., 0., 1.], dtype=angles.dtype)
     # Hacky emulation of np.repeat
     t = repeat(t, batch_size)
     t = tf.expand_dims(t, axis=2)
