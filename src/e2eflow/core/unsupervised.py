@@ -6,7 +6,7 @@ from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet, funnet_loss
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask
-from .util import to_intrinsics, add_to_debug_output
+from .util import add_to_debug_output
 from .visualization import get_flow_visualization
 
 # REGISTER ALL POSSIBLE LOSS TERMS
@@ -25,7 +25,7 @@ def _track_image(op, name):
 def unsupervised_loss(batch, params, normalization=None, augment=True,
                       return_flow=False):
     channel_mean = tf.constant(normalization[0]) / 255.0
-    im1, im2, _ = batch
+    im1, im2, _, intrin = batch
     im1 = im1 / 255.0
     im2 = im2 / 255.0
     im_shape = tf.shape(im1)[1:3]
@@ -149,7 +149,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
 
     # Add loss from epipolar geometry
     motion_angles = funnet(flows_fw[0])
-    intrin = to_intrinsics(params.get('focal_length'), params.get('cu'), params.get('cv'))
+    #intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
 
     # Debug

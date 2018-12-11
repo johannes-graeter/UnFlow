@@ -1,7 +1,6 @@
 import os
 import random
 
-import numpy as np
 import tensorflow as tf
 
 from .augment import random_crop
@@ -41,12 +40,6 @@ def frame_name_to_num(name):
     return int(stripped)
 
 
-def parse_intrinsics(path):
-    with open(path, "r") as f:
-        mat = np.loadtxt(f)
-        print(mat)
-
-
 class Input:
     mean = [104.920005, 110.1753, 114.785955]
     stddev = 1 / 0.0039216
@@ -62,27 +55,31 @@ class Input:
         self.normalize = normalize
         self.skipped_frames = skipped_frames
 
-    def _resize_crop_or_pad(self, tensor):
+    def _resize_crop_or_pad(self, tensor, calib=None):
         height, width = self.dims
 
-        _, orig_height, orig_width, _ = tensor.shape.as_list()
-        dh = (orig_height - height) / 2.
-        dw = (orig_width - width) / 2.
+        if calib is not None:
+            orig_shape = tf.shape(tensor)
+            #orig_shape = tf.Print(orig_shape, ["orig_shape", orig_shape])
+            dh = tf.scalar_mul(0.5, tf.cast(orig_shape[0] - height, dtype=tf.float32))
+            dw = tf.scalar_mul(0.5, tf.cast(orig_shape[1] - width, dtype=tf.float32))
+            #dh = tf.Print(dh, ["height diff", dh])
+            #dw = tf.Print(dw, ["width diff", dw])
 
-        self.intrinsics['cu'] -= dw
-        self.intrinsics['cv'] -= dh
+            corr = tf.concat((tf.zeros((3, 2)), [[dw], [dh], [0.]]), axis=1)
+            calib = calib - corr
 
-        return tf.image.resize_image_with_crop_or_pad(tensor, height, width)
+        return tf.image.resize_image_with_crop_or_pad(tensor, height, width), calib
 
-    def _resize_image_fixed(self, image):
+    def _resize_image_fixed(self, image, calib=None):
         height, width = self.dims
-        return tf.reshape(self._resize_crop_or_pad(image), [height, width, 3])
+        return tf.reshape(self._resize_crop_or_pad(image, calib), [height, width, 3])
 
     def _normalize_image(self, image):
         return (image - self.mean) / self.stddev
 
     def _preprocess_image(self, image):
-        image = self._resize_image_fixed(image)
+        image, _ = self._resize_image_fixed(image)
         if self.normalize:
             image = self._normalize_image(image)
         return image
@@ -133,6 +130,24 @@ class Input:
     def get_normalization(self):
         return self.mean, self.stddev
 
+    def _decode_calib(self, string_tensor, key):
+        raise NotImplementedError("core::input::_decode_calib is not implemented")
+
+    def read_calib(self, filenames, keys):
+        """Given a 2 lists of filenames and keys, constructs a reader op for calibs."""
+        filename_queue = tf.train.string_input_producer(filenames,
+                                                        shuffle=False, capacity=len(filenames))
+        key_queue = tf.train.string_input_producer(keys,
+                                                   shuffle=False, capacity=len(filenames))
+        reader = tf.WholeFileReader()
+        _, value = reader.read(filename_queue)
+
+        # decode
+        key = key_queue.dequeue()  # does that really dequeue at the same time as filenames?
+        calib = self._decode_calib(value, key)
+
+        return calib
+
     def input_raw(self, swap_images=True, sequence=True,
                   needs_crop=True, shift=0, seed=0,
                   center_crop=False, skip=0):
@@ -154,12 +169,11 @@ class Input:
             skip = [skip]
 
         data_dirs = self.data.get_raw_dirs()
-        intrinsic_paths = self.data.get_intrinsic_dirs()
+        intrinsic_dirs = self.data.get_intrinsic_dirs()
         height, width = self.dims
 
         filenames = []
         for dir_path in data_dirs:
-            intrinsics = parse_intrinsics(intrinsic_paths[dir_path])
 
             files = os.listdir(dir_path)
             files.sort()
@@ -180,7 +194,7 @@ class Input:
                             continue
                     fn1 = os.path.join(dir_path, files[i])
                     fn2 = os.path.join(dir_path, files[i + 1])
-                    filenames.append((fn1, fn2, intrinsics))
+                    filenames.append((fn1, fn2, intrinsic_dirs[dir_path]))
 
         if seed:
             random.seed(seed)
@@ -188,29 +202,37 @@ class Input:
         print("Training on {} frame pairs.".format(len(filenames)))
 
         filenames_extended = []
-        for fn1, fn2 in filenames:
-            filenames_extended.append((fn1, fn2))
+        #print("fs", filenames[0])
+        for fn1, fn2, calib in filenames:
+            filenames_extended.append((fn1, fn2, calib))
             if swap_images:
-                filenames_extended.append((fn2, fn1))
-        print("num filenames", len(filenames))
+                filenames_extended.append((fn2, fn1, calib))
+        if not shift == 0:
+            print("Attention: shfiting deactivated!")
+        # shift = shift % len(filenames_extended)
+        # filenames_extended=np.roll(filenames_extended, shift)
+        filenames_extended = list(filenames_extended)
 
-        shift = shift % len(filenames_extended)
-        filenames_extended = list(np.roll(filenames_extended, shift))
-
-        filenames_1, filenames_2 = zip(*filenames_extended)
+        filenames_1, filenames_2, calib_dir_key = zip(*filenames_extended)
         filenames_1 = list(filenames_1)
         filenames_2 = list(filenames_2)
+
+        # unpack calid files and keys
+        calib_filenames, keys = zip(*calib_dir_key)
+        calib_filenames = list(calib_filenames)
+        keys = list(keys)
 
         with tf.variable_scope('train_inputs'):
             image_1 = read_png_image(filenames_1)
             image_2 = read_png_image(filenames_2)
+            calib_tf = self.read_calib(calib_filenames, keys)
 
             shape_before_preproc = tf.shape(image_1)
 
             if needs_crop:
                 if center_crop:
-                    image_1 = self._resize_crop_or_pad(image_1)
-                    image_2 = self._resize_crop_or_pad(image_2)
+                    image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
+                    image_2, _ = self._resize_crop_or_pad(image_2)
                 else:
                     image_1, image_2 = random_crop([image_1, image_2], [height, width, 3])
             else:
@@ -222,12 +244,12 @@ class Input:
                 image_2 = self._normalize_image(image_2)
 
             return tf.train.batch(
-                [image_1, image_2, shape_before_preproc],
+                [image_1, image_2, shape_before_preproc, calib_tf],
                 batch_size=self.batch_size,
                 num_threads=self.num_threads)
 
 
-def read_png_image(filenames, num_epochs=None):
+def read_png_image(filenames):
     """Given a list of filenames, constructs a reader op for images."""
     filename_queue = tf.train.string_input_producer(filenames,
                                                     shuffle=False, capacity=len(filenames))

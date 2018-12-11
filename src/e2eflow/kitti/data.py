@@ -74,6 +74,10 @@ def exclude_test_and_train_images(kitti_dir, exclude_lists_dir, exclude_target_d
     return len(to_move)
 
 
+def get_dir(path):
+    return [x for x in os.listdir(path) if os.path.isdir(os.path.join(path, x))]
+
+
 class KITTIData(Data):
     KITTI_RAW_URL = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/'
     KITTI_2012_URL = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_stereo_flow.zip'
@@ -96,10 +100,10 @@ class KITTIData(Data):
     def get_raw_dirs(self):
         top_dir = os.path.join(self.current_dir, 'kitti_raw')
         dirs = []
-        dates = os.listdir(top_dir)
+        dates = get_dir(top_dir)
         for date in dates:
             date_path = os.path.join(top_dir, date)
-            extracts = os.listdir(date_path)
+            extracts = get_dir(date_path)
             for extract in extracts:
                 extract_path = os.path.join(date_path, extract)
                 image_02_folder = os.path.join(extract_path, 'image_02/data')
@@ -109,18 +113,19 @@ class KITTIData(Data):
 
     def get_intrinsic_dirs(self):
         top_dir = os.path.join(self.current_dir, 'kitti_raw')
-        dates = os.listdir(top_dir)
-        calib_paths = {}
+        dates = get_dir(top_dir)
+        calibs = {}
         for date in dates:
             date_path = os.path.join(top_dir, date)
-            extracts = os.listdir(date_path)
+            calib_name = os.path.join(date_path, "calib_cam_to_cam.txt")
+            extracts = get_dir(date_path)
             for extract in extracts:
                 extract_path = os.path.join(date_path, extract)
                 image_02_folder = os.path.join(extract_path, 'image_02/data')
                 image_03_folder = os.path.join(extract_path, 'image_03/data')
-                calib_paths[image_02_folder] = os.path.join(date_path, "calib_cam_to_cam.txt")
-                calib_paths[image_03_folder] = os.path.join(date_path, "calib_cam_to_cam.txt")
-        return calib_paths
+                calibs[image_02_folder] = [calib_name, '02']
+                calibs[image_03_folder] = [calib_name, '03']
+        return calibs
 
     def _maybe_get_kitti_2012(self):
         local_path = os.path.join(self.data_dir, 'data_stereo_flow')

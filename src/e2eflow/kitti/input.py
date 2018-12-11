@@ -1,18 +1,16 @@
 import os
-import sys
-
-import numpy as np
-import tensorflow as tf
 import random
 
-from ..core.input import read_png_image, Input
+import tensorflow as tf
+
 from ..core.augment import random_crop
+from ..core.input import read_png_image, Input
 
 
 def _read_flow(filenames, num_epochs=None):
     """Given a list of filenames, constructs a reader op for ground truth."""
     filename_queue = tf.train.string_input_producer(filenames,
-        shuffle=False, capacity=len(filenames), num_epochs=num_epochs)
+                                                    shuffle=False, capacity=len(filenames), num_epochs=num_epochs)
     reader = tf.WholeFileReader()
     _, value = reader.read(filename_queue)
     gt_uint16 = tf.image.decode_png(value, dtype=tf.uint16)
@@ -22,11 +20,52 @@ def _read_flow(filenames, num_epochs=None):
     return flow, mask
 
 
+# def read_calib(self, file_path):
+#     def maybe_convert_to_array(s):
+#         try:
+#             return np.array(s.replace("\n", "").strip(" ").split(" "), dtype=float)
+#         except ValueError:
+#             return s
+#
+#     with open(file_path, "r") as f:
+#         s = [x.split(":") for x in f.readlines()]
+#         s = {maybe_convert_to_array(x[0]): maybe_convert_to_array(x[1]) for x in s}
+#         return s
+def split_strings(string_tensor):
+    string_tensor = tf.expand_dims(string_tensor, axis=0)  # string_split works in batches
+    s = tf.string_split(string_tensor, "\n").values  # get lines
+    s = s[1:]
+    s = tf.string_split(s, ":").values
+    s = tf.string_strip(s)
+    s = tf.reshape(s, (-1, 2))
+    return s
+
+
+def convert_to_number(strings, mask):
+    return tf.string_to_number(tf.string_split(tf.boolean_mask(strings[:, 1], mask), " ").values)
+
+
 class KITTIInput(Input):
     def __init__(self, data, batch_size, dims=(320, 1152), *,
                  num_threads=1, normalize=True, skipped_frames=False):
-        super().__init__(data, batch_size, dims,  num_threads=num_threads,
+        super().__init__(data, batch_size, dims, num_threads=num_threads,
                          normalize=normalize, skipped_frames=skipped_frames)
+
+    def _decode_calib(self, string_tensor, key):
+        "key is 02 or 03, need to calcualte intrinsics from roation and projection matrix."
+        strings = split_strings(string_tensor)  # Should be of shape (3,3)
+
+        # mask_rot = tf.equal(strings[:, 0], "R_rect_" + key)
+        # rot = convert_to_number(strings, mask_rot)
+        # rot = tf.reshape(rot, (3, 3))
+
+        mask_proj = tf.equal(strings[:, 0], "P_rect_" + key)
+        proj = convert_to_number(strings, mask_proj)
+        proj = tf.reshape(proj, (3, 4))
+
+        #calib = tf.matmul(proj[:3, :3], tf.matrix_inverse(rot))
+        calib = proj[:3,:3]
+        return calib
 
     def _preprocess_flow(self, gt):
         flow, mask = gt
@@ -111,8 +150,8 @@ class KITTIInput(Input):
         random.seed(0)
         random.shuffle(filenames)
 
-        #shift = shift % len(filenames)
-        #filenames_ = list(np.roll(filenames, shift))
+        # shift = shift % len(filenames)
+        # filenames_ = list(np.roll(filenames, shift))
 
         fns_im1, fns_im2, fns_gt = zip(*filenames)
         fns_im1 = list(fns_im1)
@@ -124,7 +163,7 @@ class KITTIInput(Input):
         flow_gt, mask_gt = _read_flow(fns_gt)
 
         gt_queue = tf.train.string_input_producer(fns_gt,
-            shuffle=False, capacity=len(fns_gt), num_epochs=None)
+                                                  shuffle=False, capacity=len(fns_gt), num_epochs=None)
         reader = tf.WholeFileReader()
         _, gt_value = reader.read(gt_queue)
         gt_uint16 = tf.image.decode_png(gt_value, dtype=tf.uint16)

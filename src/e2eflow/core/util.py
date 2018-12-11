@@ -86,7 +86,7 @@ def get_translation_rotation(angles):
 def get_fundamental_matrix(angles, intrin):
     """
     :param angles: shape(batch_size,5) roll, pitch, yaw, trans_yaw, trans_pitch
-    :param intrin: matrix with intrinsics as constant with shape (3,3)
+    :param intrin: matrix with intrinsics as constant with shape (batch_size,3,3)
     :return: fundamental matrices, shape (batch_size,3,3)
     """
     batch_size, five = angles.shape.as_list()
@@ -102,8 +102,7 @@ def get_fundamental_matrix(angles, intrin):
 
     # Calculate Fundamtenal matrix
     intrin_inv = tf.matrix_inverse(intrin)
-    intrin_inv_tile = repeat(intrin_inv, batch_size)
-    F = tf.matmul(intrin_inv_tile, tf.matmul(E, intrin_inv_tile), transpose_a=True)
+    F = tf.matmul(intrin_inv, tf.matmul(E, intrin_inv), transpose_a=True)
     return F
 
 

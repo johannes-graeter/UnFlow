@@ -61,12 +61,16 @@ def main(argv=None):
                         normalize=False,
                         skipped_frames=True,
                         dims=(kconfig['height'], kconfig['width']))
+
+    print("Attention: Eval==Trainingset. Make that clean!")
     tr = Trainer(
         lambda shift: kinput.input_raw(swap_images=False,
                                        needs_crop=True,
                                        center_crop=True,
                                        shift=shift * run_config['batch_size']),
-        lambda: einput.input_train_2012(),
+        lambda: kinput.input_raw(swap_images=False,
+                                 needs_crop=True,
+                                 center_crop=True),
         params=kconfig,
         normalization=kinput.get_normalization(),
         train_summaries_dir=experiment.train_dir,
@@ -77,6 +81,9 @@ def main(argv=None):
         interactive_plot=run_config.get('interactive_plot'),
         devices=devices)
     tr.run(0, kiters)
+
+    if not FLAGS.debug:
+        experiment.conclude()
 
 
 # if train_dataset == 'chairs':
@@ -225,8 +232,8 @@ def main(argv=None):
 #       "Invalid dataset. Dataset must be one of "
 #       "{synthia, kitti, kitti_ft, cityscapes, chairs}")
 
-if not FLAGS.debug:
-    experiment.conclude()
+#    if not FLAGS.debug:
+#        experiment.conclude()
 
 if __name__ == '__main__':
     tf.app.run()
