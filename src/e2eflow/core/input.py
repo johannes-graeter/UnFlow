@@ -136,10 +136,8 @@ class Input:
 
     def read_calib(self, filenames, keys):
         """Given a 2 lists of filenames and keys, constructs a reader op for calibs."""
-        filename_queue = tf.train.string_input_producer(filenames,
-                                                        shuffle=False, capacity=len(filenames))
-        key_queue = tf.train.string_input_producer(keys,
-                                                   shuffle=False, capacity=len(filenames))
+        filename_queue = tf.train.string_input_producer(filenames, shuffle=False, capacity=len(filenames))
+        key_queue = tf.train.string_input_producer(keys, shuffle=False, capacity=len(keys))
         reader = tf.WholeFileReader()
         _, value = reader.read(filename_queue)
 
@@ -250,8 +248,7 @@ class Input:
 
 def read_png_image(filenames):
     """Given a list of filenames, constructs a reader op for images."""
-    filename_queue = tf.train.string_input_producer(filenames,
-                                                    shuffle=False, capacity=len(filenames))
+    filename_queue = tf.train.string_input_producer(filenames, shuffle=False, capacity=len(filenames))
     reader = tf.WholeFileReader()
     _, value = reader.read(filename_queue)
     image_uint8 = tf.image.decode_png(value, channels=3)
