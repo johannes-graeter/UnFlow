@@ -1,6 +1,7 @@
 import os
 import random
 
+import numpy as np
 import tensorflow as tf
 
 from .augment import random_crop
@@ -60,11 +61,11 @@ class Input:
 
         if calib is not None:
             orig_shape = tf.shape(tensor)
-            #orig_shape = tf.Print(orig_shape, ["orig_shape", orig_shape])
+            # orig_shape = tf.Print(orig_shape, ["orig_shape", orig_shape])
             dh = tf.scalar_mul(0.5, tf.cast(orig_shape[0] - height, dtype=tf.float32))
             dw = tf.scalar_mul(0.5, tf.cast(orig_shape[1] - width, dtype=tf.float32))
-            #dh = tf.Print(dh, ["height diff", dh])
-            #dw = tf.Print(dw, ["width diff", dw])
+            # dh = tf.Print(dh, ["height diff", dh])
+            # dw = tf.Print(dw, ["width diff", dw])
 
             corr = tf.concat((tf.zeros((3, 2)), [[dw], [dh], [0.]]), axis=1)
             calib = calib - corr
@@ -194,7 +195,8 @@ class Input:
                             continue
                     fn1 = os.path.join(dir_path, files[i])
                     fn2 = os.path.join(dir_path, files[i + 1])
-                    filenames.append((fn1, fn2, intrinsic_dirs[dir_path]))
+                    calib_dir, key = intrinsic_dirs[dir_path]
+                    filenames.append((fn1, fn2, calib_dir, key))
 
         if seed:
             random.seed(seed)
@@ -202,25 +204,22 @@ class Input:
         print("Training on {} frame pairs.".format(len(filenames)))
 
         filenames_extended = []
-        #print("fs", filenames[0])
-        for fn1, fn2, calib in filenames:
-            filenames_extended.append((fn1, fn2, calib))
+        # print("fs", filenames[0])
+        for fn1, fn2, calib, key in filenames:
+            filenames_extended.append((fn1, fn2, calib, key))
             if swap_images:
-                filenames_extended.append((fn2, fn1, calib))
-        if not shift == 0:
-            print("Attention: shfiting deactivated!")
-        # shift = shift % len(filenames_extended)
-        # filenames_extended=np.roll(filenames_extended, shift)
-        filenames_extended = list(filenames_extended)
+                filenames_extended.append((fn2, fn1, calib, key))
 
-        filenames_1, filenames_2, calib_dir_key = zip(*filenames_extended)
+        shift = shift % len(filenames_extended)
+        filenames_extended = list(np.roll(filenames_extended, shift, axis=0))
+
+        filenames_1, filenames_2, calib_dir, key = zip(*filenames_extended)
         filenames_1 = list(filenames_1)
         filenames_2 = list(filenames_2)
 
         # unpack calid files and keys
-        calib_filenames, keys = zip(*calib_dir_key)
-        calib_filenames = list(calib_filenames)
-        keys = list(keys)
+        calib_filenames = list(calib_dir)
+        keys = list(key)
 
         with tf.variable_scope('train_inputs'):
             image_1 = read_png_image(filenames_1)
