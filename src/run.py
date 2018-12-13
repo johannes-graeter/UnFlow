@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from e2eflow.core.train import Trainer
 from e2eflow.experiment import Experiment
+from e2eflow.kitti.data import KITTIDataOdometry
 from e2eflow.kitti.data import KITTIDataRaw
 from e2eflow.kitti.input import KITTIInput
 from e2eflow.util import convert_input_strings
@@ -39,49 +40,51 @@ def main(argv=None):
     gpu_batch_size = int(run_config['batch_size'] / max(len(gpu_list), 1))
     devices = ['/gpu:' + str(gpu_num) for gpu_num in gpu_list]
 
-    train_dataset = run_config.get('dataset', 'kitti')
+    train_dataset = run_config.get('dataset', 'kitti_raw')
 
-    kdata = KITTIDataRaw(data_dir=dirs['data'],
-                         fast_dir=dirs.get('fast'),
-                         stat_log_dir=None,
-                         development=run_config['development'], do_fetch=False)
-    einput = KITTIInput(data=kdata,
-                        batch_size=1,
-                        normalize=False,
-                        # dims=(384, 1280)
-                        )
+    edata = KITTIDataOdometry(data_dir=dirs['data_testing'], fast_dir=dirs.get('fast'), stat_log_dir=None,
+                              development=run_config['development'], do_fetch=False)
+    einput = KITTIInput(data=edata, batch_size=1, normalize=False)
 
-    assert (train_dataset == 'kitti')
-    kconfig = copy.deepcopy(experiment.config['train'])
-    kconfig.update(experiment.config['train_kitti'])
-    convert_input_strings(kconfig, dirs)
-    kiters = kconfig.get('num_iters', 0)
-    kinput = KITTIInput(data=kdata,
-                        batch_size=gpu_batch_size,
-                        normalize=False,
-                        skipped_frames=True,
-                        dims=(kconfig['height'], kconfig['width']))
+    if 'kitti' in train_dataset:
+        if train_dataset == 'kitti_raw':
+            kdata = KITTIDataRaw(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
+                                 development=run_config['development'], do_fetch=False)
+        elif train_dataset == 'kitti_odometry':
+            kdata = KITTIDataOdometry(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
+                                      development=run_config['development'], do_fetch=False)
+        else:
+            raise Exception("Dataset {} is unknown".format(train_dataset))
+        kconfig = copy.deepcopy(experiment.config['train'])
+        kconfig.update(experiment.config['train_kitti'])
+        convert_input_strings(kconfig, dirs)
+        kiters = kconfig.get('num_iters', 0)
+        kinput = KITTIInput(data=kdata,
+                            batch_size=gpu_batch_size,
+                            normalize=False,
+                            skipped_frames=True,
+                            dims=(kconfig['height'], kconfig['width']))
 
-    print("Attention: Eval==Trainingset. Make that clean!")
-    tr = Trainer(
-        lambda shift: kinput.input_raw(swap_images=False,
-                                       needs_crop=True,
-                                       center_crop=True,
-                                       shift=shift * run_config['batch_size']),
-        lambda: kinput.input_raw(swap_images=False,
-                                 needs_crop=True,
-                                 center_crop=True),
-        params=kconfig,
-        normalization=kinput.get_normalization(),
-        train_summaries_dir=experiment.train_dir,
-        eval_summaries_dir=experiment.eval_dir,
-        experiment=FLAGS.ex,
-        ckpt_dir=experiment.save_dir,
-        debug=FLAGS.debug,
-        interactive_plot=run_config.get('interactive_plot'),
-        devices=devices)
-    tr.run(0, kiters)
-
+        tr = Trainer(
+            lambda shift: kinput.input_raw(swap_images=False,
+                                           needs_crop=True,
+                                           center_crop=True,
+                                           shift=shift * run_config['batch_size']),
+            lambda: einput.input_raw(swap_images=False,
+                                     needs_crop=True,
+                                     center_crop=True),
+            params=kconfig,
+            normalization=kinput.get_normalization(),
+            train_summaries_dir=experiment.train_dir,
+            eval_summaries_dir=experiment.eval_dir,
+            experiment=FLAGS.ex,
+            ckpt_dir=experiment.save_dir,
+            debug=FLAGS.debug,
+            interactive_plot=run_config.get('interactive_plot'),
+            devices=devices)
+        tr.run(0, kiters)
+    else:
+        raise Exception("Only Kitti supported.")
     if not FLAGS.debug:
         experiment.conclude()
 

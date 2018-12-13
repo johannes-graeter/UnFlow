@@ -22,7 +22,7 @@ import tensorflow.contrib.slim as slim
 from . import util
 from .flow_util import flow_error_avg, flow_to_color, flow_error_image, outlier_pct
 from .image_warp import image_warp
-from .input import resize_input, resize_output_crop, resize_output, resize_output_flow
+from .input import resize_output_crop
 from .losses import occlusion, DISOCC_THRESH, create_outgoing_mask
 from .supervised import supervised_loss
 from .unsupervised import unsupervised_loss
@@ -49,7 +49,7 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
         restore_external_nets = finetune if ckpt is None else []
         variables_to_save = slim.get_variables_to_restore(include=net_names)
     else:
-        #restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
+        # restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
         restore_external_nets = finetune
         if params.get('epipolar_loss_weight', 0.) > 0. and not params.get('train_motion_only', False):
             print('-- save', net_names[-2:])
@@ -197,10 +197,10 @@ class Trainer:
 
         print('-- training from i = {} to {}'.format(start_iter, max_iter))
 
-        #assert (max_iter - start_iter + 1) % save_interval == 0
+        # assert (max_iter - start_iter + 1) % save_interval == 0
         for i in range(start_iter, max_iter + 1, save_interval):
             self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            #self.eval(1)
+            self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
@@ -328,7 +328,7 @@ class Trainer:
                             run_metadata=run_metadata)
 
                         # Save last successfull index
-                        save_iter = max(i,save_iter)
+                        save_iter = max(i, save_iter)
 
                         if i == 1 or i % self.params['display_interval'] == 0:
                             summary = sess.run(summary_, feed_dict=feed_dict)
@@ -354,26 +354,27 @@ class Trainer:
                         raise Exception("Not all threads are dead...")
                     print("All threads are dead, continue!")
 
-
     def eval(self, num):
         assert num == 1  # TODO enable num > 1
 
         with tf.Graph().as_default():
             inputs = self.eval_batch_fn()
+            im1, im2, input_shape, intrinsics = inputs[:4]
+            truths = inputs[4:]  # empty if dataset has no groutndtruth flow
             height, width, _ = tf.unstack(tf.squeeze(input_shape), num=3, axis=0)
-            #im1 = resize_input(im1, height, width, 384, 1280)
-            #im2 = resize_input(im2, height, width, 384, 1280)
+            # im1 = resize_input(im1, height, width, 384, 1280)
+            # im2 = resize_input(im2, height, width, 384, 1280)
 
-            _, flow, flow_bw = unsupervised_loss(
-                (im1, im2),
+            _, flow, flow_bw, motion_angles = unsupervised_loss(
+                (im1, im2, input_shape, intrinsics),
                 params=self.params,
                 normalization=self.normalization,
                 augment=False, return_flow=True)
 
-            #im1 = resize_output(im1, height, width, 3)
-            #im2 = resize_output(im2, height, width, 3)
-            #flow = resize_output_flow(flow, height, width, 2)
-            #flow_bw = resize_output_flow(flow_bw, height, width, 2)
+            # im1 = resize_output(im1, height, width, 3)
+            # im2 = resize_output(im2, height, width, 3)
+            # flow = resize_output_flow(flow, height, width, 2)
+            # flow_bw = resize_output_flow(flow_bw, height, width, 2)
 
             variables_to_restore = tf.all_variables()
 
@@ -397,8 +398,8 @@ class Trainer:
                 truth_tuples.append(('non-occluded', flow_noc, mask_noc))
                 images_ += [flow_error_image(flow, flow_occ, mask_occ, mask_noc)]
                 image_names += ['flow error']
-            else:
-                raise NotImplementedError()
+            elif len(truths) == 2:
+                raise NotImplementedError
                 truth_tuples.append(('flow', truths[0], truths[1]))
 
             for name, gt_flow, mask in truth_tuples:
