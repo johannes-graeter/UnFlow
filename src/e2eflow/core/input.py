@@ -199,7 +199,7 @@ class Input:
         if seed:
             random.seed(seed)
             random.shuffle(filenames)
-        print("Training on {} frame pairs.".format(len(filenames)))
+        print("Input {} frame pairs.".format(len(filenames)))
 
         filenames_extended = []
         # print("fs", filenames[0])

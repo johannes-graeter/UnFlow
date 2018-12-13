@@ -91,7 +91,7 @@ def write_flo(flow, filename):
     f.close()
 
 
-def _evaluate_experiment(name, input_fn, data_input, do_resize=True):
+def evaluate_experiment(name, input_fn, data_input, do_resize=True):
     normalize_fn = data_input._normalize_image
     resized_h = data_input.dims[0]
     resized_w = data_input.dims[1]
@@ -116,8 +116,8 @@ def _evaluate_experiment(name, input_fn, data_input, do_resize=True):
 
     with tf.Graph().as_default():  # , tf.device('gpu:' + FLAGS.gpu):
         inputs = input_fn()
-        im1, im2, input_shape = inputs[:3]
-        truth = inputs[3:]
+        im1, im2, input_shape, intrinsics = inputs[:4]
+        truth = inputs[4:]
 
         height, width, _ = tf.unstack(tf.squeeze(input_shape), num=3, axis=0)
 
@@ -125,8 +125,8 @@ def _evaluate_experiment(name, input_fn, data_input, do_resize=True):
             im1 = resize_input(im1, height, width, resized_h, resized_w)
             im2 = resize_input(im2, height, width, resized_h, resized_w)  # TODO adapt train.py
 
-        _, flow, flow_bw = unsupervised_loss(
-            (im1, im2, input_shape),
+        _, flow, flow_bw, motion_angles_tf = unsupervised_loss(
+            (im1, im2, input_shape, intrinsics),
             normalization=data_input.get_normalization(),
             params=params, augment=False, return_flow=True)
 
@@ -243,14 +243,17 @@ def _evaluate_experiment(name, input_fn, data_input, do_resize=True):
 
             # JG: return flow
             flows = []
+            motion_angles = []
             try:
                 num_iters = 0
                 while not coord.should_stop() and (max_iter is None or num_iters != max_iter):
-                    all_results = sess.run([flow, flow_bw, flow_fw_int16, flow_bw_int16] + all_ops)
+                    all_results = sess.run([flow, flow_bw, flow_fw_int16, flow_bw_int16, motion_angles_tf] + all_ops)
                     # JG: get flow
                     flows.append(all_results[0])
+                    # JG: get motion
+                    motion_angles.append(all_results[4])
                     flow_fw_res, flow_bw_res, flow_fw_int16_res, flow_bw_int16_res = all_results[:4]
-                    all_results = all_results[4:]
+                    all_results = all_results[5:]
                     image_results = all_results[:num_ims]
                     scalar_results = all_results[num_ims:]
                     iterstr = str(num_iters).zfill(6)
@@ -293,7 +296,7 @@ def _evaluate_experiment(name, input_fn, data_input, do_resize=True):
         _, scalar_name = t
         print("({}) {} = {}".format(name, scalar_name, avg))
 
-    return image_lists, image_names, flows
+    return image_lists, image_names, flows, motion_angles
 
 
 def main(argv=None):
@@ -335,7 +338,7 @@ def main(argv=None):
 
     results = []
     for name in FLAGS.ex.split(','):
-        result, image_names, _ = _evaluate_experiment(name, input_fn, data_input)
+        result, image_names, _, _ = evaluate_experiment(name, input_fn, data_input)
         results.append(result)
 
     display(results, image_names)

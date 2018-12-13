@@ -188,4 +188,4 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     if not return_flow:
         return final_loss
 
-    return final_loss, final_flow_fw, final_flow_bw
+    return final_loss, final_flow_fw, final_flow_bw, motion_angles

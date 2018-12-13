@@ -15,8 +15,18 @@ import numpy as np
 
 from e2eflow.core.util import get_translation_rotation
 
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+from matplotlib import pyplot as plt
 
-def track_points(flows, first_image):
+# params for ShiTomasi corner detection
+feature_params_def = dict(maxCorners=100,
+                          qualityLevel=0.3,
+                          minDistance=7,
+                          blockSize=7)
+
+
+def track_points(flows, first_image, feature_params=feature_params_def):
     """
     Track points in an image sequence as in the KLT tracker but with learned flow.
     :param flows: estimated flow, shape(sequ_length,height,width,2)
@@ -26,11 +36,6 @@ def track_points(flows, first_image):
     """
 
     # Caclucate points of interest in first image.
-    # params for ShiTomasi corner detection
-    feature_params = dict(maxCorners=100,
-                          qualityLevel=0.3,
-                          minDistance=7,
-                          blockSize=7)
     # Points has shape (num_features, 1, 2)
     points = cv2.goodFeaturesToTrack(cv2.cvtColor(first_image, cv2.COLOR_RGB2GRAY), mask=None, **feature_params)
     points = np.squeeze(np.array(points))  # shape (num_features,2)
@@ -87,26 +92,47 @@ def to_affine(motion_angles):
     return out
 
 
-def accumulate_motion(motions):
+def accumulate_motion(motions, scales, invert=False):
     accumulator = np.eye(4)
 
     out = [accumulator]
-    for m in to_affine(motions):
+    for m, s in zip(to_affine(motions), scales):
+        # Apply scale
+        m[:3, 3] = m[:3, 3] / np.linalg.norm(m[:3, 3]) * s
+        # Invert if necessary
+        if invert:
+            m = np.linalg.inv(m)
+        # Accumulate
         out.append(out[-1].dot(m))
+    # First element is double
     out.pop(0)
     return out
 
 
 def draw_trajectory(acc_motion, min_res=(300, 300)):
-    from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-    from matplotlib.figure import Figure
-    from matplotlib import pyplot as plt
-
     fig = Figure(figsize=(3, 3))  # size in inches: 1 inch=2.54 cm
     canvas = FigureCanvas(fig)
     width, height = [int(x) for x in fig.get_size_inches() * fig.get_dpi()]
     ax = fig.gca()
 
+    def get_dims(acc_motion, border_perc=0.1):
+        x_max = acc_motion[:, 0, 3].max()
+        x_min = acc_motion[:, 0, 3].min()
+
+        z_max = acc_motion[:, 2, 3].max()
+        z_min = acc_motion[:, 2, 3].min()
+
+        dmax = max(x_max - x_min, z_max - z_min)
+        x_max = x_min + dmax
+        z_max = z_min + dmax
+        x_min -= dmax / 2
+        z_min -= dmax / 2
+
+        border = dmax * border_perc
+
+        return (x_min - border, x_max + border), (z_min - border, z_max + border)
+
+    x_minmax, z_minmax = get_dims(acc_motion)
     # imgs = np.ones((acc_motion.shape[0], res[0], res[1], 3), dtype=float)
     out = []
     for m in acc_motion:
@@ -121,8 +147,8 @@ def draw_trajectory(acc_motion, min_res=(300, 300)):
             ax.add_artist(a)
 
         ax.axis("equal")
-        ax.set_xlim((-10., 10.))
-        ax.set_ylim((-10., 10.))
+        ax.set_xlim(x_minmax)
+        ax.set_ylim(z_minmax)
 
         canvas.draw()  # draw the canvas, cache the renderer
         img = np.fromstring(canvas.tostring_rgb(), dtype='uint8').reshape((width, height, 3))
@@ -158,11 +184,26 @@ def resize_with_pad(image, height, width, pad_color=(0., 0., 0.)):
     return resized_image
 
 
-def add_motion_to_display(imgs, motions):
+def draw_angles_as_text(imgs, motions):
+    # Add info about yaw and pitch
+    dim_names = ['roll', 'pitch', 'yaw', 'trans_yaw', 'trans_pitch']
+    for i in range(len(imgs)):
+        m = motions[i]
+        text = ['{0}={1:.2e}'.format(t, v) for t, v in zip(dim_names, m)]
+        dy = 40
+        y = 10
+        for l in text:
+            y += dy
+            imgs[i, -1, 0] = cv2.putText(imgs[i, -1, 0], l, (40, y), 0, 0.8, (0, 0, 0), 2)
+    return imgs
+
+
+def add_motion_to_display(imgs, motions, scales):
     height1 = imgs.shape[3]
     width1 = imgs.shape[4]
+
     traj_imgs = np.array(
-        draw_trajectory(np.array(accumulate_motion(motions)), min_res=(height1, height1)))
+        draw_trajectory(np.array(accumulate_motion(motions, scales=scales, invert=True)), min_res=(height1, height1)))
     s = list(imgs.shape)
     s[1] = 1
     imgs = np.concatenate((imgs, np.ones(s, dtype=float)), axis=1)
@@ -177,12 +218,13 @@ def add_motion_to_display(imgs, motions):
 
     imgs[:, -1, :, dh:height0 + dh, dw:width0 + dw] = traj_imgs
 
+    imgs = draw_angles_as_text(imgs, motions)
     return imgs
 
 
-def add_flow_to_display(imgs, flows):
+def add_flow_to_display(imgs, flows, feature_params=feature_params_def):
     first_imgs = imgs[:, -1, 0, :, :]
-    tracked_points = track_points(flows, first_imgs[0, :, :, :])
+    tracked_points = track_points(flows, first_imgs[0, :, :, :], feature_params)
     track_imgs = draw_tracked_points(tracked_points, first_imgs)
     imgs[:, -1, 0, :, :] = track_imgs
 
@@ -197,38 +239,52 @@ def main(argv=None):
 
     default_config = config_dict()
     dirs = default_config['dirs']
+    print("-- loading from {}".format(dirs))
 
     input_dims = (320, 1152)
 
     if FLAGS.dataset == 'kitti':
-        data = KITTIData(dirs['data'], development=True)
+        data = KITTIData(dirs['data'], development=False, do_fetch=False)
         data_input = KITTIInput(data, batch_size=1, normalize=False,
                                 dims=input_dims)
         # dims=(384, 1280))
 
     input_fn0 = getattr(data_input, 'input_raw')
-    input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False)
+
+    # shift = np.random.randint(0, 5000)  # get different set of images each call
+    shift = 800
+    print("shift by {} images".format(shift))
+    input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False, shift=shift)
 
     results = []
     for name in FLAGS.ex.split(','):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
-        display_images, image_names, flows = eval_gui._evaluate_experiment(name, input_fn, data_input, do_resize=False)
-
+        # Motion angles are roll, pitch,yaw, translation_yaw, translation ptich from current image to last image
+        display_images, image_names, flows, motion_angles = eval_gui.evaluate_experiment(name, input_fn, data_input,
+                                                                                         do_resize=False)
         flows = np.squeeze(np.array(flows), axis=1)
         imgs = np.array(display_images)
 
         # Draw image with tracked features.
-        imgs = add_flow_to_display(imgs, flows)
+        feature_params = dict(maxCorners=1000,
+                              qualityLevel=0.3,
+                              minDistance=10,
+                              blockSize=7)
+        imgs = add_flow_to_display(imgs, flows, feature_params)
         image_names[-1] = "tracklets"
-
-        # Make dummy motion
-        motions = np.zeros((len(flows), 5))
-        for i in range(len(flows)):
-            motions[i, 2] = i * 0.1
+        #
+        # # Make dummy motion
+        # motions = np.zeros((len(flows), 5))
+        # for i in range(len(flows)):
+        #     motions[i, 2] = i * 0.1
 
         # Accumulate and draw motion
-        imgs = add_motion_to_display(imgs, motions)
+        motion_angles = np.squeeze(np.array(motion_angles), axis=1)
+        print(motion_angles)
+        # motion is from current to last, so direction of translation is negative.
+        scales = np.ones((motion_angles.shape[0])) * (-0.5)
+        imgs = add_motion_to_display(imgs, motion_angles, scales)
         image_names.append("motion")
 
         results.append(imgs)
