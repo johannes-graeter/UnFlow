@@ -53,7 +53,6 @@ def track_points(flows, first_image, feature_params=feature_params_def):
         dudv = np.array(dudv)
         points = points + dudv
         out.append(points)
-        # print(points)
 
     return out
 
@@ -245,16 +244,16 @@ def main(argv=None):
 
     if FLAGS.dataset == 'kitti':
         data = KITTIData(dirs['data'], development=False, do_fetch=False)
-        data_input = KITTIInput(data, batch_size=1, normalize=False,
-                                dims=input_dims)
-        # dims=(384, 1280))
+        data_input = KITTIInput(data, batch_size=1, normalize=False, dims=input_dims)
+    else:
+        raise Exception("Motion eval only implemented for KITTI yet!")
 
     input_fn0 = getattr(data_input, 'input_raw')
-
-    # shift = np.random.randint(0, 5000)  # get different set of images each call
-    shift = 800
+    shift = np.random.randint(0, 1e6)  # get different set of images each call
     print("shift by {} images".format(shift))
-    input_fn = lambda: input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False, shift=shift)
+
+    def input_fn():
+        return input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False, shift=shift)
 
     results = []
     for name in FLAGS.ex.split(','):
@@ -273,15 +272,10 @@ def main(argv=None):
                               blockSize=7)
         imgs = add_flow_to_display(imgs, flows, feature_params)
         image_names[-1] = "tracklets"
-        #
-        # # Make dummy motion
-        # motions = np.zeros((len(flows), 5))
-        # for i in range(len(flows)):
-        #     motions[i, 2] = i * 0.1
 
         # Accumulate and draw motion
         motion_angles = np.squeeze(np.array(motion_angles), axis=1)
-        print(motion_angles)
+
         # motion is from current to last, so direction of translation is negative.
         scales = np.ones((motion_angles.shape[0])) * (-0.5)
         imgs = add_motion_to_display(imgs, motion_angles, scales)
