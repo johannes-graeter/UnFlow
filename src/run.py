@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from e2eflow.core.train import Trainer
 from e2eflow.experiment import Experiment
-from e2eflow.kitti.data import KITTIData
+from e2eflow.kitti.data import KITTIDataRaw
 from e2eflow.kitti.input import KITTIInput
 from e2eflow.util import convert_input_strings
 
@@ -41,10 +41,10 @@ def main(argv=None):
 
     train_dataset = run_config.get('dataset', 'kitti')
 
-    kdata = KITTIData(data_dir=dirs['data'],
-                      fast_dir=dirs.get('fast'),
-                      stat_log_dir=None,
-                      development=run_config['development'], do_fetch=False)
+    kdata = KITTIDataRaw(data_dir=dirs['data'],
+                         fast_dir=dirs.get('fast'),
+                         stat_log_dir=None,
+                         development=run_config['development'], do_fetch=False)
     einput = KITTIInput(data=kdata,
                         batch_size=1,
                         normalize=False,

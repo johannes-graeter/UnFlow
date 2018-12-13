@@ -4,7 +4,7 @@ import tensorflow as tf
 
 import eval_gui
 from e2eflow.gui import display
-from e2eflow.kitti.data import KITTIData
+from e2eflow.kitti.data import KITTIDataRaw
 from e2eflow.kitti.input import KITTIInput
 from e2eflow.util import config_dict
 
@@ -243,7 +243,7 @@ def main(argv=None):
     input_dims = (320, 1152)
 
     if FLAGS.dataset == 'kitti':
-        data = KITTIData(dirs['data'], development=False, do_fetch=False)
+        data = KITTIDataRaw(dirs['data'], development=False, do_fetch=False)
         data_input = KITTIInput(data, batch_size=1, normalize=False, dims=input_dims)
     else:
         raise Exception("Motion eval only implemented for KITTI yet!")

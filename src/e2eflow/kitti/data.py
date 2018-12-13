@@ -78,68 +78,56 @@ def get_dir(path):
     return [x for x in os.listdir(path) if os.path.isdir(os.path.join(path, x))]
 
 
-class KITTIData(Data):
-    KITTI_RAW_URL = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/'
-    KITTI_2012_URL = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_stereo_flow.zip'
-    KITTI_2015_URL = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_scene_flow.zip'
-
-    dirs = ['data_stereo_flow', 'data_scene_flow', 'kitti_raw']
-
+class KITTIDataRaw(Data):
     def __init__(self, data_dir, stat_log_dir=None, do_fetch=True,
                  development=True, fast_dir=None):
         super().__init__(data_dir, stat_log_dir, do_fetch=do_fetch,
                          development=development,
                          fast_dir=fast_dir)
-        self.calib_paths = {}
+        self.url = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/'
+        self.dir = 'kitti_raw'
+        self.image_subdirs = ['image_02/data', 'image_03/data']
+        self.calib_identifiers = ['P_rect_02', 'P_rect_03']
+        self.calib_name = 'calib_cam_to_cam.txt'
 
     def _fetch_if_missing(self):
-        self._maybe_get_kitti_raw()
-        self._maybe_get_kitti_2012()
-        self._maybe_get_kitti_2015()
+        self._maybe_get_data()
 
-    def get_raw_dirs(self):
-        top_dir = os.path.join(self.current_dir, 'kitti_raw')
-        dirs = []
+    def _get_paths(self):
+        """Get paths for extracted data and calibs.
+        Sometimes that needs to be overloaded because there could be one calib for
+        one sequence (odometry) or many sequences (kitti_raw)"""
+        top_dir = os.path.join(self.current_dir, self.dir)
         dates = get_dir(top_dir)
+        extract_paths = []
+        calib_paths = []
         for date in dates:
             date_path = os.path.join(top_dir, date)
             extracts = get_dir(date_path)
             for extract in extracts:
-                extract_path = os.path.join(date_path, extract)
-                image_02_folder = os.path.join(extract_path, 'image_02/data')
-                image_03_folder = os.path.join(extract_path, 'image_03/data')
-                dirs.extend([image_02_folder, image_03_folder])
+                extract_paths.append(os.path.join(date_path, extract))
+                calib_paths.append(date_path)
+        return extract_paths, calib_paths
+
+    def get_raw_dirs(self):
+        dirs = []
+        for extract_path in self._get_paths()[0]:
+            image_folder = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            dirs.extend(image_folder)
         return dirs
 
     def get_intrinsic_dirs(self):
-        top_dir = os.path.join(self.current_dir, 'kitti_raw')
-        dates = get_dir(top_dir)
         calibs = {}
-        for date in dates:
-            date_path = os.path.join(top_dir, date)
-            calib_name = os.path.join(date_path, "calib_cam_to_cam.txt")
-            extracts = get_dir(date_path)
-            for extract in extracts:
-                extract_path = os.path.join(date_path, extract)
-                image_02_folder = os.path.join(extract_path, 'image_02/data')
-                image_03_folder = os.path.join(extract_path, 'image_03/data')
-                calibs[image_02_folder] = [calib_name, '02']
-                calibs[image_03_folder] = [calib_name, '03']
+        for extract_path, calib_path in zip(*self._get_paths()):
+            image_folders = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            calib_file = os.path.join(calib_path, self.calib_name)
+            for f, ident in zip(image_folders, self.calib_identifiers):
+                calibs[f] = [calib_file, ident]
         return calibs
 
-    def _maybe_get_kitti_2012(self):
-        local_path = os.path.join(self.data_dir, 'data_stereo_flow')
-        if not os.path.isdir(local_path):
-            self._download_and_extract(self.KITTI_2012_URL, local_path)
-
-    def _maybe_get_kitti_2015(self):
-        local_path = os.path.join(self.data_dir, 'data_scene_flow')
-        if not os.path.isdir(local_path):
-            self._download_and_extract(self.KITTI_2015_URL, local_path)
-
-    def _maybe_get_kitti_raw(self):
-        base_url = self.KITTI_RAW_URL
-        local_dir = os.path.join(self.data_dir, 'kitti_raw')
+    def _maybe_get_data(self):
+        base_url = self.url
+        local_dir = os.path.join(self.data_dir, self.dir)
         records = raw_records.get_kitti_records(self.development)
         downloaded_records = False
 
@@ -168,3 +156,57 @@ class KITTIData(Data):
             exclude_lists_dir = '../files/kitti_excludes'
             excluded = exclude_test_and_train_images(local_dir, exclude_lists_dir, exclude_target_dir,
                                                      remove=True)
+
+
+class KITTIDataOdometry(KITTIDataRaw):
+    def __init__(self, data_dir, stat_log_dir=None, do_fetch=True,
+                 development=True, fast_dir=None):
+        super().__init__(data_dir, stat_log_dir, do_fetch=do_fetch,
+                         development=development,
+                         fast_dir=fast_dir)
+        # KITTI_2015_URL = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_scene_flow.zip'
+        self.dir = './'
+        self.image_subdirs = ['image_2', 'image_3']
+        self.calib_identifiers = ['P2', 'P3']
+        self.calib_name = 'calib.txt'
+
+    def _fetch_if_missing(self):
+        raise Exception("Can not download odometry automatically get it manually.")
+
+    def _get_paths(self):
+        """Odometry benchmark has one hierarchy level less than raw dataset"""
+        top_dir = os.path.join(self.current_dir, self.dir)
+        sequs = get_dir(top_dir)
+        sequ_path = [os.path.join(top_dir, sequ) for sequ in sequs]
+
+        # sequ paths and calib paths are identical for this dataset
+        return sequ_path, sequ_path
+
+    def _maybe_get_data(self):
+        pass
+
+# class KITTIDataFlow(KITTIDataRaw):
+#     def __init__(self, data_dir, stat_log_dir=None, do_fetch=True,
+#                  development=True, fast_dir=None):
+#         super().__init__(data_dir, stat_log_dir, do_fetch=do_fetch,
+#                          development=development,
+#                          fast_dir=fast_dir)
+#         self.url = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_stereo_flow.zip'
+#         # KITTI_2015_URL = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_scene_flow.zip'
+#         self.dir = 'data_stereo_flow'
+#         self.image_subdirs = ['image_02/data', 'image_03/data']
+#         self.calib_identifiers = ['P_rect_02', 'P_rect_03']
+#
+#     def _fetch_if_missing(self):
+#         self._maybe_get_kitti_2012()
+#         self._maybe_get_kitti_2015()
+#
+#     def _maybe_get_kitti_2012(self):
+#         local_path = os.path.join(self.data_dir, 'data_stereo_flow')
+#         if not os.path.isdir(local_path):
+#             self._download_and_extract(self.url, local_path)
+
+#    def _maybe_get_kitti_2015(self):
+#        local_path = os.path.join(self.data_dir, 'data_scene_flow')
+#        if not os.path.isdir(local_path):
+#            self._download_and_extract(self.KITTI_2015_URL, local_path)

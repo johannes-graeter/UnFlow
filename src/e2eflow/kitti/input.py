@@ -55,16 +55,11 @@ class KITTIInput(Input):
         "key is 02 or 03, need to calcualte intrinsics from roation and projection matrix."
         strings = split_strings(string_tensor)  # Should be of shape (3,3)
 
-        # mask_rot = tf.equal(strings[:, 0], "R_rect_" + key)
-        # rot = convert_to_number(strings, mask_rot)
-        # rot = tf.reshape(rot, (3, 3))
-
-        mask_proj = tf.equal(strings[:, 0], "P_rect_" + key)
+        mask_proj = tf.equal(strings[:, 0], key)
         proj = convert_to_number(strings, mask_proj)
         proj = tf.reshape(proj, (3, 4))
 
-        #calib = tf.matmul(proj[:3, :3], tf.matrix_inverse(rot))
-        calib = proj[:3,:3]
+        calib = proj[:3, :3]
         return calib
 
     def _preprocess_flow(self, gt):

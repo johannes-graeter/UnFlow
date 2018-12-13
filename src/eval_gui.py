@@ -16,7 +16,7 @@ from e2eflow.core.losses import DISOCC_THRESH, occlusion
 from e2eflow.core.train import restore_networks
 from e2eflow.core.unsupervised import unsupervised_loss
 from e2eflow.gui import display
-from e2eflow.kitti.data import KITTIData
+from e2eflow.kitti.data import KITTIDataRaw
 from e2eflow.kitti.input import KITTIInput
 from e2eflow.middlebury.data import MiddleburyData
 from e2eflow.middlebury.input import MiddleburyInput
@@ -309,7 +309,7 @@ def main(argv=None):
     dirs = default_config['dirs']
 
     if FLAGS.dataset == 'kitti':
-        data = KITTIData(dirs['data'], development=True)
+        data = KITTIDataRaw(dirs['data'], development=True)
         data_input = KITTIInput(data, batch_size=1, normalize=False,
                                 dims=(384, 1280))
         inputs = getattr(data_input, 'input_' + FLAGS.variant)()
