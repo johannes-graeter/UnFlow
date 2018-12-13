@@ -49,10 +49,13 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
         restore_external_nets = finetune if ckpt is None else []
         variables_to_save = slim.get_variables_to_restore(include=net_names)
     else:
-        restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
-        if params.get('epipolar_loss_weight', 0.) > 0.:
+        #restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
+        restore_external_nets = finetune
+        if params.get('epipolar_loss_weight', 0.) > 0. and not params.get('train_motion_only', False):
+            print('-- save', net_names[-2:])
             variables_to_save = slim.get_variables_to_restore(include=net_names[-2:])
         else:
+            print('-- save', net_names[-1])
             variables_to_save = slim.get_variables_to_restore(include=[net_names[-1]])
 
     saver = tf.train.Saver(variables_to_save, max_to_keep=1000)
@@ -86,6 +89,9 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
 
 
 def _add_loss_summaries():
+    losses = tf.get_collection('losses')
+    for l in losses:
+        tensor_name = re.sub('tower_[0-9]*/', '', l.op.name)
     losses = tf.get_collection('losses')
     for l in losses:
         tensor_name = re.sub('tower_[0-9]*/', '', l.op.name)
@@ -284,12 +290,11 @@ class Trainer:
                 coord = tf.train.Coordinator()
                 threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
-                save_iter = max_iter
+                save_iter = start_iter
 
                 for local_i, i in enumerate(range(start_iter, max_iter + 1)):
                     # Stop if OutOfRangeException was raised.
                     if coord.should_stop():
-                        save_iter = min(save_iter, i)
                         break
                     # if INTERACTIVE_PLOT:
                     #    plt.title = "{} ({})".format(self.experiment, i)
@@ -322,6 +327,9 @@ class Trainer:
                             options=run_options,
                             run_metadata=run_metadata)
 
+                        # Save last successfull index
+                        save_iter = max(i,save_iter)
+
                         if i == 1 or i % self.params['display_interval'] == 0:
                             summary = sess.run(summary_, feed_dict=feed_dict)
                             summary_writer.add_summary(summary, i)
@@ -337,16 +345,21 @@ class Trainer:
 
                 summary_writer.close()
                 coord.request_stop()
-                coord.join(threads)
+                try:
+                    coord.join(threads)
+                except tf.errors.InvalidArgumentError as exc:
+                    print(exc)
+                    # Make sure all threads are dead
+                    if any(t.is_alive() for t in threads):
+                        raise Exception("Not all threads are dead...")
+                    print("All threads are dead, continue!")
+
 
     def eval(self, num):
         assert num == 1  # TODO enable num > 1
 
         with tf.Graph().as_default():
             inputs = self.eval_batch_fn()
-            im1, im2, input_shape = inputs[:3]
-            truths = inputs[3:]
-
             height, width, _ = tf.unstack(tf.squeeze(input_shape), num=3, axis=0)
             #im1 = resize_input(im1, height, width, 384, 1280)
             #im2 = resize_input(im2, height, width, 384, 1280)

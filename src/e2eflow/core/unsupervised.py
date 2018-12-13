@@ -22,7 +22,7 @@ def _track_image(op, name):
     tf.add_to_collection('train_images', tf.identity(op, name=name))
 
 
-def unsupervised_loss(batch, params, normalization=None, augment=True,
+def unsupervised_loss(batch, params, normalization=None, augment=False,
                       return_flow=False):
     channel_mean = tf.constant(normalization[0]) / 255.0
     im1, im2, _, intrin = batch
@@ -38,6 +38,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
     _track_image(im2, 'orig2')
 
     if augment:
+        raise Exception("Implement intrinsics from augmentation")
         im1_geo, im2_geo, border_mask_global = random_affine(
             [im1, im2, border_mask],
             horizontal_flipping=True,
@@ -179,7 +180,10 @@ def unsupervised_loss(batch, params, normalization=None, augment=True,
     for i, cur_flow in enumerate(flows_fw):
         _track_image(get_flow_visualization(cur_flow), 'flow_{}'.format(i))
     _track_image(get_flow_visualization(final_flow_fw), 'estimated_flow')
-    _track_image(image_warp(im1, final_flow_fw), 'warp_1to2')
+
+    im1_pred = image_warp(im2, final_flow_fw)
+    _track_image(im1_pred, 'warp_2to1')
+    _track_image(tf.abs(im1 - im1_pred)/255, 'diff')
 
     if not return_flow:
         return final_loss
