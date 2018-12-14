@@ -4,7 +4,7 @@ import tensorflow as tf
 
 import eval_gui
 from e2eflow.gui import display
-from e2eflow.kitti.data import KITTIDataRaw
+from e2eflow.kitti.data import KITTIDataOdometry
 from e2eflow.kitti.input import KITTIInput
 from e2eflow.util import config_dict
 
@@ -26,7 +26,7 @@ feature_params_def = dict(maxCorners=100,
                           blockSize=7)
 
 
-def track_points(flows, first_image, feature_params=feature_params_def):
+def track_points(flows, points):
     """
     Track points in an image sequence as in the KLT tracker but with learned flow.
     :param flows: estimated flow, shape(sequ_length,height,width,2)
@@ -35,11 +35,6 @@ def track_points(flows, first_image, feature_params=feature_params_def):
             Tracklet length is always smaller/equal sequence length
     """
 
-    # Caclucate points of interest in first image.
-    # Points has shape (num_features, 1, 2)
-    points = cv2.goodFeaturesToTrack(cv2.cvtColor(first_image, cv2.COLOR_RGB2GRAY), mask=None, **feature_params)
-    points = np.squeeze(np.array(points))  # shape (num_features,2)
-
     out = [points]
 
     for flow in flows:
@@ -47,7 +42,7 @@ def track_points(flows, first_image, feature_params=feature_params_def):
         for u, v in points.astype(int):
             du = 0
             dv = 0
-            if 0 < u < first_image.shape[1] and 0 < v < first_image.shape[0]:
+            if 0 < u < flow.shape[1] and 0 < v < flow.shape[0]:
                 du, dv = flow[v, u]
             dudv.append((du, dv))
         dudv = np.array(dudv)
@@ -221,9 +216,18 @@ def add_motion_to_display(imgs, motions, scales):
     return imgs
 
 
-def add_flow_to_display(imgs, flows, feature_params=feature_params_def):
-    first_imgs = imgs[:, -1, 0, :, :]
-    tracked_points = track_points(flows, first_imgs[0, :, :, :], feature_params)
+def get_keypoints(image, feature_params):
+    # Caclucate points of interest in first image.
+    # Points has shape (num_features, 1, 2)
+    points = cv2.goodFeaturesToTrack(cv2.cvtColor(image, cv2.COLOR_RGB2GRAY), mask=None, **feature_params)
+    points = np.squeeze(np.array(points))  # shape (num_features,2)
+    return points
+
+
+def add_flow_to_display(imgs, flows, params):
+    first_imgs = imgs[:, -1, 0, :, :]  # im1 for whole sequence
+    points = get_keypoints(first_imgs[0, :, :, :], params['feature_params'])
+    tracked_points = track_points(flows, points)
     track_imgs = draw_tracked_points(tracked_points, first_imgs)
     imgs[:, -1, 0, :, :] = track_imgs
 
@@ -243,7 +247,7 @@ def main(argv=None):
     input_dims = (320, 1152)
 
     if FLAGS.dataset == 'kitti':
-        data = KITTIDataRaw(dirs['data'], development=False, do_fetch=False)
+        data = KITTIDataOdometry(dirs['data_testing'], development=False, do_fetch=False)
         data_input = KITTIInput(data, batch_size=1, normalize=False, dims=input_dims)
     else:
         raise Exception("Motion eval only implemented for KITTI yet!")
@@ -266,11 +270,14 @@ def main(argv=None):
         imgs = np.array(display_images)
 
         # Draw image with tracked features.
-        feature_params = dict(maxCorners=1000,
-                              qualityLevel=0.3,
-                              minDistance=10,
-                              blockSize=7)
-        imgs = add_flow_to_display(imgs, flows, feature_params)
+        params = {
+            'feature_params': dict(maxCorners=1000,
+                                   qualityLevel=0.3,
+                                   minDistance=10,
+                                   blockSize=7)
+            ,
+            'resample_rate': 10}
+        imgs = add_flow_to_display(imgs, flows, params)
         image_names[-1] = "tracklets"
 
         # Accumulate and draw motion

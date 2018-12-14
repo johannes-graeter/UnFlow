@@ -62,19 +62,14 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
 
     sess.run(tf.global_variables_initializer())
 
-    if ckpt is not None:
-        # continue training
-        saver.restore(sess, ckpt.model_checkpoint_path)
-        saver.recover_last_checkpoints(ckpt.all_model_checkpoint_paths)
-
-    for i, ckpt in enumerate(restore_external_nets):
-        print('-- restore', net_names[i], ckpt.model_checkpoint_path)
+    for i, finetune_ckpt in enumerate(restore_external_nets):
+        print('-- restore', net_names[i], finetune_ckpt.model_checkpoint_path)
         try:
             nets_to_restore = [net_names[i]]
             variables_to_restore = slim.get_variables_to_restore(
                 include=nets_to_restore)
             restorer = tf.train.Saver(variables_to_restore)
-            restorer.restore(sess, ckpt.model_checkpoint_path)
+            restorer.restore(sess, finetune_ckpt.model_checkpoint_path)
         except:
             # load partial network (missing final 2 upconvolutions)
             nets_to_restore = [net_names[i]]
@@ -83,7 +78,14 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
             variables_to_restore = [v for v in variables_to_restore
                                     if not 'full_res' in v.name]
             restorer = tf.train.Saver(variables_to_restore)
-            restorer.restore(sess, ckpt.model_checkpoint_path)
+            restorer.restore(sess, finetune_ckpt.model_checkpoint_path)
+
+    # Restore currently training net always last, so that restored values maybe overriden.
+    if ckpt is not None:
+        # continue training
+        print('-- training ', ckpt.model_checkpoint_path)
+        saver.restore(sess, ckpt.model_checkpoint_path)
+        saver.recover_last_checkpoints(ckpt.all_model_checkpoint_paths)
     return saver
 
 
