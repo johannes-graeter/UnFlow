@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .funnet_architectures import custom_frontend, default_arg_scope, trunc_normal
+from .funnet_architectures import custom_frontend, default_frontend_arg_scope, trunc_normal
 from .util import add_to_debug_output
 
 slim = tf.contrib.slim
@@ -13,11 +13,11 @@ def funnet(flow):
         return custom_frontend(input_flow, scope=scope)
 
     with tf.variable_scope('funnet') as sc:
-        weight_decay = 0.0005
+        weight_decay = 0.05  # Same as for lowe net
 
         # Frontend
-        with slim.arg_scope(default_arg_scope(weight_decay)):
-            # Get flow fetaure map from fully convolutional frontend.
+        with slim.arg_scope(default_frontend_arg_scope(weight_decay)):
+            # Get flow feature map from fully convolutional frontend.
             net, end_points = frontend(flow, scope=sc.original_name_scope)
 
             # Reduce information for fully connected.
@@ -28,9 +28,9 @@ def funnet(flow):
 
         # Backend
         with slim.arg_scope([slim.fully_connected],
-                            biases_initializer=tf.constant_initializer(0.0001),  # very small bias
+                            biases_initializer=tf.constant_initializer(0.1),
                             weights_regularizer=slim.l2_regularizer(weight_decay),
-                            weights_initializer=tf.truncated_normal_initializer(0.0, 0.05),  # ca. 10 degrees std dev
+                            weights_initializer=trunc_normal(0.05),  # ca. 10 degrees std dev
                             outputs_collections="motion_angles"):
             # Reshape for fully connected net.
             bs, height, width, channels = net.shape.as_list()

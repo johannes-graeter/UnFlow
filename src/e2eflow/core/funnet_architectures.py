@@ -12,21 +12,29 @@ def trunc_normal(stddev):
     return tf.truncated_normal_initializer(0.0, stddev)
 
 
+def default_frontend_arg_scope(weight_decay=0.0005):
+    with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                        activation_fn=tf.nn.relu,
+                        biases_initializer=tf.constant_initializer(0.1),
+                        weights_regularizer=slim.l2_regularizer(weight_decay),
+                        outputs_collections='funnet'):
+        with slim.arg_scope([slim.conv2d], padding='SAME'):
+            with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
+                return arg_sc
+
+
 def custom_frontend(inputs,
                     scope='custom_frontend'):
     with tf.variable_scope(scope, 'custom_frontend', [inputs]) as sc:
         end_points_collection = sc.original_name_scope  # + '_end_points'
 
         # Collect outputs for conv2d, fully_connected and max_pool2d.
-        with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
-                            outputs_collections=[end_points_collection]):
+        with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
             net = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
             net = slim.conv2d(net, 32, [5, 5], stride=2, scope='cnv2')
             net = slim.conv2d(net, 64, [3, 3], stride=2, scope='cnv3')
             net = slim.conv2d(net, 128, [3, 3], stride=2, scope='cnv4')
             net = slim.conv2d(net, 256, [3, 3], stride=1, scope='cnv5')
-            print(net.shape.as_list())
-            # net = slim.max_pool2d(net, [3, 3], 2, scope='pool5')
 
             # Use conv2d instead of fully_connected layers.
             with slim.arg_scope([slim.conv2d],
@@ -107,17 +115,6 @@ def alexnet_v2(inputs,
                         net = tf.squeeze(net, [1, 2], name='fc8/squeezed')
                     end_points[sc.name + '/fc8'] = net
     return net, end_points
-
-
-def default_arg_scope(weight_decay=0.0005):
-    with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                        activation_fn=tf.nn.relu,
-                        biases_initializer=tf.constant_initializer(0.1),
-                        weights_regularizer=slim.l2_regularizer(weight_decay),
-                        outputs_collections='funnet'):
-        with slim.arg_scope([slim.conv2d], padding='SAME'):
-            with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
-                return arg_sc
 
 
 def motion_net_lowe(flow):
