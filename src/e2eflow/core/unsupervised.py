@@ -7,7 +7,7 @@ from .funnet import funnet, funnet_loss
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask
 from .util import add_to_debug_output
-from .visualization import get_flow_visualization
+from .flow_util import flow_to_color
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -178,8 +178,8 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
             tf.add_to_collection('params', weight)
 
     for i, cur_flow in enumerate(flows_fw):
-        _track_image(get_flow_visualization(cur_flow), 'flow_{}'.format(i))
-    _track_image(get_flow_visualization(final_flow_fw), 'estimated_flow')
+        _track_image(flow_to_color(cur_flow), 'flow_{}'.format(i))
+    _track_image(flow_to_color(final_flow_fw), 'estimated_flow')
 
     im1_pred = image_warp(im2, final_flow_fw)
     _track_image(im1_pred, 'warp_2to1')
