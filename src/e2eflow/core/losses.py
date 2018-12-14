@@ -1,10 +1,13 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 from tensorflow.contrib.distributions import Normal
 
-from ..ops import backward_warp, forward_warp
 from .image_warp import image_warp
+from ..ops import forward_warp
 
+from tensorflow.python.ops import math_ops
+from .util import epipolar_errors
+from .util import get_fundamental_matrix
 
 DISOCC_THRESH = 0.8
 
@@ -39,12 +42,12 @@ def compute_losses(im1, im2, flow_fw, flow_bw,
     flow_fw_warped = image_warp(flow_fw, flow_bw)
     flow_diff_fw = flow_fw + flow_bw_warped
     flow_diff_bw = flow_bw + flow_fw_warped
-    
-    mag_sq_fw = length_sq(flow_fw) + length_sq(flow_bw_warped) 
+
+    mag_sq_fw = length_sq(flow_fw) + length_sq(flow_bw_warped)
     mag_sq_bw = length_sq(flow_bw) + length_sq(flow_fw_warped)
-    occ_thresh_fw =  0.01 * mag_sq_fw + 0.5
-    occ_thresh_bw =  0.01 * mag_sq_bw + 0.5
-    
+    occ_thresh_fw = 0.01 * mag_sq_fw + 0.5
+    occ_thresh_bw = 0.01 * mag_sq_bw + 0.5
+
     fb_occ_fw = tf.cast(length_sq(flow_diff_fw) > occ_thresh_fw, tf.float32)
     fb_occ_bw = tf.cast(length_sq(flow_diff_bw) > occ_thresh_bw, tf.float32)
 
@@ -64,8 +67,8 @@ def compute_losses(im1, im2, flow_fw, flow_bw,
     losses['occ'] = (charbonnier_loss(occ_fw) +
                      charbonnier_loss(occ_bw))
 
-    losses['photo'] =  (photometric_loss(im_diff_fw, mask_fw) +
-                        photometric_loss(im_diff_bw, mask_bw))
+    losses['photo'] = (photometric_loss(im_diff_fw, mask_fw) +
+                       photometric_loss(im_diff_bw, mask_bw))
 
     losses['grad'] = (gradient_loss(im1, im2_warped, mask_fw) +
                       gradient_loss(im2, im1_warped, mask_bw))
@@ -92,7 +95,7 @@ def ternary_loss(im1, im2_warped, mask, max_distance=1):
     with tf.variable_scope('ternary_loss'):
         def _ternary_transform(image):
             intensities = tf.image.rgb_to_grayscale(image) * 255
-            #patches = tf.extract_image_patches( # fix rows_in is None
+            # patches = tf.extract_image_patches( # fix rows_in is None
             #    intensities,
             #    ksizes=[1, patch_size, patch_size, 1],
             #    strides=[1, 1, 1, 1],
@@ -100,7 +103,7 @@ def ternary_loss(im1, im2_warped, mask, max_distance=1):
             #    padding='SAME')
             out_channels = patch_size * patch_size
             w = np.eye(out_channels).reshape((patch_size, patch_size, 1, out_channels))
-            weights =  tf.constant(w, dtype=tf.float32)
+            weights = tf.constant(w, dtype=tf.float32)
             patches = tf.nn.conv2d(intensities, weights, strides=[1, 1, 1, 1], padding='SAME')
 
             transf = patches - intensities
@@ -128,18 +131,18 @@ def occlusion(flow_fw, flow_bw):
     flow_fw_warped = image_warp(flow_fw, flow_bw)
     flow_diff_fw = flow_fw + flow_bw_warped
     flow_diff_bw = flow_bw + flow_fw_warped
-    occ_thresh =  0.01 * mag_sq + 0.5
+    occ_thresh = 0.01 * mag_sq + 0.5
     occ_fw = tf.cast(length_sq(flow_diff_fw) > occ_thresh, tf.float32)
     occ_bw = tf.cast(length_sq(flow_diff_bw) > occ_thresh, tf.float32)
     return occ_fw, occ_bw
 
 
-#def disocclusion(div):
+# def disocclusion(div):
 #    """Creates binary disocclusion map based on flow divergence."""
 #    return tf.round(norm(tf.maximum(0.0, div), 0.3))
 
 
-#def occlusion(im_diff, div):
+# def occlusion(im_diff, div):
 #    """Creates occlusion map based on warping error & flow divergence."""
 #    gray_diff = tf.image.rgb_to_grayscale(im_diff)
 #    return 1 - norm(gray_diff, 20.0 / 255) * norm(tf.minimum(0.0, div), 0.3)
@@ -147,7 +150,7 @@ def occlusion(flow_fw, flow_bw):
 
 def divergence(flow):
     with tf.variable_scope('divergence'):
-        filter_x = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]] # sobel filter
+        filter_x = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]  # sobel filter
         filter_y = np.transpose(filter_x)
         weight_array_x = np.zeros([3, 3, 1, 1])
         weight_array_x[:, :, 0, 0] = filter_x
@@ -174,11 +177,12 @@ def diffusion_loss(flow, im, occ):
     """Forces diffusion weighted by motion, intensity and occlusion label similarity.
     Inspired by Bilateral Flow Filtering.
     """
+
     def neighbor_diff(x, num_in=1):
         weights = np.zeros([3, 3, num_in, 8 * num_in])
         out_channel = 0
-        for c in range(num_in): # over input channels
-            for n in [0, 1, 2, 3, 5, 6, 7, 8]: # over neighbors
+        for c in range(num_in):  # over input channels
+            for n in [0, 1, 2, 3, 5, 6, 7, 8]:  # over neighbors
                 weights[1, 1, c, out_channel] = 1
                 weights[n // 3, n % 3, c, out_channel] = -1
                 out_channel += 1
@@ -224,7 +228,7 @@ def _smoothness_deltas(flow):
 
 def _gradient_delta(im1, im2_warped):
     with tf.variable_scope('gradient_delta'):
-        filter_x = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]] # sobel filter
+        filter_x = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]  # sobel filter
         filter_y = np.transpose(filter_x)
         weight_array = np.zeros([3, 3, 3, 6])
         for c in range(3):
@@ -359,8 +363,31 @@ def create_outgoing_mask(flow):
         pos_x = tf.cast(grid_x, dtype=tf.float32) + flow_u
         pos_y = tf.cast(grid_y, dtype=tf.float32) + flow_v
         inside_x = tf.logical_and(pos_x <= tf.cast(width - 1, tf.float32),
-                                  pos_x >=  0.0)
+                                  pos_x >= 0.0)
         inside_y = tf.logical_and(pos_y <= tf.cast(height - 1, tf.float32),
-                                  pos_y >=  0.0)
+                                  pos_y >= 0.0)
         inside = tf.logical_and(inside_x, inside_y)
         return tf.expand_dims(tf.cast(inside, tf.float32), 3)
+
+
+def funnet_loss(motion_angle_prediction, flow, intrinsics):
+    # Weight loss in function of flow amplitude.
+    # For small flow, fundamental error is always small (norm(F) goes to zero for translation going to zero)
+    # Calculate squared norm of flow
+    # flow2 = tf.multiply(flow, flow)
+    # weight = tf.reduce_mean(tf.reduce_sum(flow2, axis=2))
+    weight = 1.
+
+    # Several flow layers are outputted at different resolution.
+    # First two are always du and dv at highest res.
+    # Epipolar error of flow
+    predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
+
+    # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
+    loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, normalize=True, debug=True))
+
+    # Add loss
+    tf.losses.add_loss(tf.scalar_mul(weight, loss))
+
+    # Return the 'total' loss: loss fns + regularization terms defined in the model
+    return tf.losses.get_total_loss()

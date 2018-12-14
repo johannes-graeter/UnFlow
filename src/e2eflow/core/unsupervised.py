@@ -2,12 +2,12 @@ import tensorflow as tf
 
 from .augment import random_affine, random_photometric
 from .downsample import downsample
-from .flownet import flownet, FLOW_SCALE
-from .funnet import funnet, funnet_loss
-from .image_warp import image_warp
-from .losses import compute_losses, create_border_mask
-from .util import add_to_debug_output
 from .flow_util import flow_to_color
+from .flownet import flownet, FLOW_SCALE
+from .funnet import funnet
+from .image_warp import image_warp
+from .losses import compute_losses, create_border_mask, funnet_loss
+from .util import add_to_debug_output
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -150,7 +150,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
 
     # Add loss from epipolar geometry
     motion_angles = funnet(flows_fw[0])
-    #intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
+    # intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, intrin)
 
     # Debug
@@ -183,7 +183,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
 
     im1_pred = image_warp(im2, final_flow_fw)
     _track_image(im1_pred, 'warp_2to1')
-    _track_image(tf.abs(im1 - im1_pred)/255, 'diff')
+    _track_image(tf.abs(im1 - im1_pred) / 255, 'diff')
 
     if not return_flow:
         return final_loss

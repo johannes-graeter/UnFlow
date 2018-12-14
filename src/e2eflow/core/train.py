@@ -110,21 +110,6 @@ def _add_variable_summaries():
 
     # train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
-    def add_weights(layer_name):
-        conv5_vars = tf.get_default_graph().get_tensor_by_name('funnet/alexnet_v2/{}/weights:0'.format(layer_name))
-        # add_to_debug_output('debug/{}/weights'.format(layer_name), conv5_vars)
-
-        # for n in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5']:
-        # add_weights(n)
-        # act = tf.get_collection('funnet/alexnet_v2/fc8')
-        # print(act)
-        # bs, a, b, c = act[0].shape.as_list()
-        # act = tf.reshape(act, (bs, a * b * c))
-        # for i in range(batch_size):
-        #     for j in range(a * b * c):
-        #         tensor_names = "motion_angles/batch{}/activation{}".format(i, j)
-        #         tf.summary.scalar(tensor_names, act[i, j])
-
 
 def _add_param_summaries():
     params = tf.get_collection('params')
