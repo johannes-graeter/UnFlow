@@ -154,13 +154,17 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     # Get regularization for explanation mask.
     # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
     ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
-    reg_loss_exp_mask = compute_exp_reg_loss(cur_exp_logits, ref_exp_mask)
+    # Regularization loss must be done before converting to probability.
+    reg_loss_exp_mask = compute_exp_reg_loss(mask_logits, ref_exp_mask)
 
     # Convert mask of logits to inlier probability.
     inlier_probs = get_inlier_prob_from_mask_logits(mask_logits)
 
     # intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
-    fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs, intrin)
+    # Upscale for flow weighting. Same method as for upscaling final_flow_fw. 
+    # Perhaps use loss directly on non-upsampled image?
+    inlier_probs_full_res = tf.squeeze(tf.image.resize_bilinear(tf.expand_dims(inlier_probs, axis=3), im_shape), axis=3)
+    fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs_full_res, intrin)
 
     # Debug
     for i in range(5):
@@ -168,7 +172,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     add_to_debug_output('funnet/final_flow', final_flow_fw)
     add_to_debug_output('funnet/input', flows_fw[0])
     add_to_debug_output('funnet/loss', fun_loss)
-    _track_image('funnet/mask', inlier_probs)
+    _track_image(tf.expand_dims(inlier_probs_full_res, axis=3), 'funnet/mask')
 
     if params.get('train_motion_only'):
         combined_loss = params.get('epipolar_loss_weight') * fun_loss

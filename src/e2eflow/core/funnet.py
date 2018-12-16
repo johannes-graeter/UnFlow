@@ -18,7 +18,7 @@ def funnet(flow):
         net, end_points = frontend(flow, scope=sc.original_name_scope)
 
         # Mask layers
-        [mask, _, _, _], end_points_mask = exp_mask_layers(net, 2, scope=sc.original_name_scop)
+        [mask, _, _, _], end_points_mask = exp_mask_layers(net, 2, scope=sc.original_name_scope)
         end_points.update(end_points_mask)
 
         # Backend

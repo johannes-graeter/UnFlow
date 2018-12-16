@@ -206,14 +206,13 @@ def get_image_coordinates_as_points(shape):
     :param shape: (batch_size, flow_height, flow_width)
     :return: pixel coordinates in homogenous coordinates as tensor of shape (batch_size, flow_height*flow_width, 3)
     """
-
     u = get_image_coordinates_u(shape)
     u = tf.expand_dims(u, axis=3)
     v = get_image_coordinates_v(shape)
     v = tf.expand_dims(v, axis=3)
 
     uv1 = tf.stack((u, v, tf.ones_like(u)), axis=3)
-    uv1_vec = tf.reshape(uv1, (shape[0], shape[1] * shape[2], 3))
+    uv1_vec = tf.reshape(uv1, (shape[0], shape[1]*shape[2], 3))
 
     return uv1_vec
 
@@ -282,9 +281,9 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
     if mask_inlier_prob is not None:
         # Do weighting with mask.
         # Get weights as vector with shape (batch_size, height*width)
-        x, y = tf.matrix_transpose(old_points[0, :, 2])  # all batches are same
-        weights = mask_inlier_prob[:, tf.cast(y, tf.int32), tf.cast(x, tf.int32)]
-        print(error_vec.shape.as_list(), weights.shape.as_list())
+        assert(len(mask_inlier_prob.shape.as_list())==3)
+        assert(mask_inlier_prob.shape.as_list()[1]==flow_h and mask_inlier_prob.shape.as_list()[2]==flow_w)
+        weights = tf.reshape(mask_inlier_prob, (-1, flow_h*flow_w))
         error_vec = tf.multiply(error_vec, weights)
 
     if debug:
@@ -296,7 +295,7 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
 
 
 def get_reference_explain_mask(mask_shape, downscaling=0):
-    batch_size, height, width = mask_shape
+    batch_size, height, width, _ = mask_shape
     tmp = np.array([0, 1])
     ref_exp_mask = np.tile(tmp,
                            (batch_size,
