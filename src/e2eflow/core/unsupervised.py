@@ -168,7 +168,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     add_to_debug_output('funnet/final_flow', final_flow_fw)
     add_to_debug_output('funnet/input', flows_fw[0])
     add_to_debug_output('funnet/loss', fun_loss)
-    _track_image('funnet/mask', mask)
+    _track_image('funnet/mask', inlier_probs)
 
     if params.get('train_motion_only'):
         combined_loss = params.get('epipolar_loss_weight') * fun_loss
