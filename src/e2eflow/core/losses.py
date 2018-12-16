@@ -370,7 +370,10 @@ def create_outgoing_mask(flow):
         return tf.expand_dims(tf.cast(inside, tf.float32), 3)
 
 
-def funnet_loss(motion_angle_prediction, flow, intrinsics):
+def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
+    """
+    Loss for funnet. Calculates normalized epipolar error and weights it by inlier_probability.
+    """
     # Weight loss in function of flow amplitude.
     # For small flow, fundamental error is always small (norm(F) goes to zero for translation going to zero)
     # Calculate squared norm of flow
@@ -384,10 +387,17 @@ def funnet_loss(motion_angle_prediction, flow, intrinsics):
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
 
     # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
-    loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, normalize=True, debug=True))
+    loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, inlier_prob, normalize=True, debug=True))
 
     # Add loss
     tf.losses.add_loss(tf.scalar_mul(weight, loss))
 
     # Return the 'total' loss: loss fns + regularization terms defined in the model
     return tf.losses.get_total_loss()
+
+
+def compute_exp_reg_loss(pred, ref):
+    l = tf.nn.softmax_cross_entropy_with_logits(
+        labels=tf.reshape(ref, [-1, 2]),
+        logits=tf.reshape(pred, [-1, 2]))
+    return tf.reduce_mean(l)

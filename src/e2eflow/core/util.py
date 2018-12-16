@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 
 def to_intrinsics(f, cu, cv):
@@ -217,7 +218,7 @@ def get_image_coordinates_as_points(shape):
     return uv1_vec
 
 
-def epipolar_errors(predict_fundamental_matrix_in, flow, *, normalize=True, debug=False):
+def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, *, normalize=True, debug=False):
     """
     return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
@@ -278,12 +279,40 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, *, normalize=True, debu
         norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e10)
         error_vec = tf.divide(error_vec, norm_fact)
 
+    if mask_inlier_prob is not None:
+        # Do weighting with mask.
+        # Get weights as vector with shape (batch_size, height*width)
+        x, y = tf.matrix_transpose(old_points[0, :, 2])  # all batches are same
+        weights = mask_inlier_prob[:, tf.cast(y, tf.int32), tf.cast(x, tf.int32)]
+        print(error_vec.shape.as_list(), weights.shape.as_list())
+        error_vec = tf.multiply(error_vec, weights)
+
     if debug:
         add_to_debug_output('new_points', new_points)
         add_to_debug_output('fundamental_matrix', pred_fun)
         add_to_debug_output('error', error_vec)
 
     return error_vec
+
+
+def get_reference_explain_mask(mask_shape, downscaling=0):
+    batch_size, height, width = mask_shape
+    tmp = np.array([0, 1])
+    ref_exp_mask = np.tile(tmp,
+                           (batch_size,
+                            int(height / (2 ** downscaling)),
+                            int(width / (2 ** downscaling)),
+                            1))
+    ref_exp_mask = tf.constant(ref_exp_mask, dtype=tf.float32)
+    return ref_exp_mask
+
+
+def get_inlier_prob_from_mask_logits(cur_exp_logits):
+    # cur_exp_logits = tf.slice(mask_logits, [0, 0, 0, 0], [-1, -1, -1, 2])  # For extracting current mask from several maks
+    # ref_exp_mask = get_reference_explain_mask(flow_fw[0].shape.as_list())
+    cur_exp = tf.nn.softmax(cur_exp_logits)
+    inlier_probs = cur_exp[:, :, :, 1]  # inlier prob
+    return inlier_probs
 
 
 def print_nan_tf(t, msg=""):

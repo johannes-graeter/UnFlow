@@ -23,29 +23,66 @@ def default_frontend_arg_scope(weight_decay=0.0005):
                 return arg_sc
 
 
-def custom_frontend(inputs,
-                    scope='custom_frontend'):
-    with tf.variable_scope(scope, 'custom_frontend', [inputs]) as sc:
-        end_points_collection = sc.original_name_scope  # + '_end_points'
+def custom_frontend(inputs, scope='custom_frontend'):
+    with slim.arg_scope(default_frontend_arg_scope(0.05)):
+        with tf.variable_scope(scope, 'custom_frontend', [inputs]) as sc:
+            end_points_collection = sc.original_name_scope  # + '_end_points'
 
-        # Collect outputs for conv2d, fully_connected and max_pool2d.
-        with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
-            net = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
-            net = slim.conv2d(net, 32, [5, 5], stride=2, scope='cnv2')
-            net = slim.conv2d(net, 64, [3, 3], stride=2, scope='cnv3')
-            net = slim.conv2d(net, 128, [3, 3], stride=2, scope='cnv4')
-            net = slim.conv2d(net, 256, [3, 3], stride=1, scope='cnv5')
+            # Collect outputs for conv2d, fully_connected and max_pool2d.
+            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
+                # This is same as compression layer for lowe's net with stride 1 for last conv layer
+                # for larger width and height
+                net = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
+                net = slim.conv2d(net, 32, [5, 5], stride=2, scope='cnv2')
+                net = slim.conv2d(net, 64, [3, 3], stride=2, scope='cnv3')
+                net = slim.conv2d(net, 128, [3, 3], stride=2, scope='cnv4')
+                net = slim.conv2d(net, 256, [3, 3], stride=1, scope='cnv5')
 
-            # Use conv2d instead of fully_connected layers.
-            with slim.arg_scope([slim.conv2d],
-                                weights_initializer=trunc_normal(0.005),
-                                biases_initializer=tf.constant_initializer(0.1)):
-                net = slim.conv2d(net, 1024, [1, 1], scope='fc7')
                 # Convert end_points_collection into a end_point dict.
                 end_points = slim.utils.convert_collection_to_dict(
                     end_points_collection)
-                end_points[sc.name + '/fc8'] = net
-    return net, end_points
+
+        return net, end_points
+
+
+def exp_mask_layers(net, mask_channels, scope='exp'):
+    """Learn a wighting mask for outliers.
+    This is an idea from Lowe's paper and the same architecture, only with stride 1 in upcnv5.
+
+    :param net; output of frontend (before semantic motin estimation layers)
+    :param mask_channels; number of channels for input of frontend (in case of forward flow=2)
+    :param scope; scope name for layers
+
+    :return [mask1,mask2,mask3,mask4]: masks for each compression step of the frontend. Mask1 is for input flow.
+    :return end_points: dict for layers end_point collection.
+    """
+    with tf.variable_scope(scope, 'exp', [net]) as sc:
+        end_points_collection = sc.original_name_scope  # + '_end_points'
+        with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
+                            normalizer_fn=None,
+                            weights_regularizer=slim.l2_regularizer(0.05),
+                            activation_fn=tf.nn.relu,
+                            outputs_collections=end_points_collection):
+            upcnv5 = slim.conv2d_transpose(net, 256, [3, 3], stride=1, scope='upcnv5')
+
+            upcnv4 = slim.conv2d_transpose(upcnv5, 128, [3, 3], stride=2, scope='upcnv4')
+            mask4 = slim.conv2d(upcnv4, mask_channels, [3, 3], stride=1, scope='mask4',
+                                normalizer_fn=None, activation_fn=None)
+
+            upcnv3 = slim.conv2d_transpose(upcnv4, 64, [3, 3], stride=2, scope='upcnv3')
+            mask3 = slim.conv2d(upcnv3, mask_channels, [3, 3], stride=1, scope='mask3',
+                                normalizer_fn=None, activation_fn=None)
+
+            upcnv2 = slim.conv2d_transpose(upcnv3, 32, [5, 5], stride=2, scope='upcnv2')
+            mask2 = slim.conv2d(upcnv2, mask_channels, [5, 5], stride=1, scope='mask2',
+                                normalizer_fn=None, activation_fn=None)
+
+            upcnv1 = slim.conv2d_transpose(upcnv2, 16, [7, 7], stride=2, scope='upcnv1')
+            mask1 = slim.conv2d(upcnv1, mask_channels, [7, 7], stride=1, scope='mask1',
+                                normalizer_fn=None, activation_fn=None)
+
+    end_points = slim.utils.convert_collection_to_dict(end_points_collection)
+    return [mask1, mask2, mask3, mask4], end_points
 
 
 def alexnet_v2(inputs,
@@ -79,41 +116,42 @@ def alexnet_v2(inputs,
         or None).
       end_points: a dict of tensors with intermediate activations.
     """
-    with tf.variable_scope(scope, 'alexnet_v2', [inputs]) as sc:
-        end_points_collection = sc.original_name_scope  # + '_end_points'
+    with slim.arg_scope(default_frontend_arg_scope(0.05)):
+        with tf.variable_scope(scope, 'alexnet_v2', [inputs]) as sc:
+            end_points_collection = sc.original_name_scope  # + '_end_points'
 
-        # Collect outputs for conv2d, fully_connected and max_pool2d.
-        with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
-                            outputs_collections=[end_points_collection]):
-            net = slim.conv2d(inputs, 64, [11, 11], 4, padding='VALID',
-                              scope='conv1')
-            # net = slim.max_pool2d(net, [3, 3], 2, scope='pool1')
-            net = slim.conv2d(net, 192, [5, 5], scope='conv2')
-            net = slim.max_pool2d(net, [3, 3], 2, scope='pool2')
-            net = slim.conv2d(net, 384, [3, 3], scope='conv3')
-            net = slim.conv2d(net, 384, [3, 3], scope='conv4')
-            net = slim.conv2d(net, 256, [3, 3], scope='conv5')
-            # net = slim.max_pool2d(net, [3, 3], 2, scope='pool5')
+            # Collect outputs for conv2d, fully_connected and max_pool2d.
+            with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
+                                outputs_collections=[end_points_collection]):
+                net = slim.conv2d(inputs, 64, [11, 11], 4, padding='VALID',
+                                  scope='conv1')
+                # net = slim.max_pool2d(net, [3, 3], 2, scope='pool1')
+                net = slim.conv2d(net, 192, [5, 5], scope='conv2')
+                net = slim.max_pool2d(net, [3, 3], 2, scope='pool2')
+                net = slim.conv2d(net, 384, [3, 3], scope='conv3')
+                net = slim.conv2d(net, 384, [3, 3], scope='conv4')
+                net = slim.conv2d(net, 256, [3, 3], scope='conv5')
+                # net = slim.max_pool2d(net, [3, 3], 2, scope='pool5')
 
-            # Use conv2d instead of fully_connected layers.
-            with slim.arg_scope([slim.conv2d],
-                                weights_initializer=trunc_normal(0.005),
-                                biases_initializer=tf.constant_initializer(0.1)):
-                #        net = slim.conv2d(net, 4096, [5, 5], padding='VALID',
-                #                          scope='fc6')
-                net = slim.conv2d(net, 1024, [1, 1], scope='fc7')
-                # Convert end_points_collection into a end_point dict.
-                end_points = slim.utils.convert_collection_to_dict(
-                    end_points_collection)
-                if num_classes:
-                    net = slim.conv2d(net, num_classes, [1, 1],
-                                      activation_fn=None,
-                                      normalizer_fn=None,
-                                      biases_initializer=tf.zeros_initializer(),
-                                      scope='fc8')
-                    if spatial_squeeze:
-                        net = tf.squeeze(net, [1, 2], name='fc8/squeezed')
-                    end_points[sc.name + '/fc8'] = net
+                # Use conv2d instead of fully_connected layers.
+                with slim.arg_scope([slim.conv2d],
+                                    weights_initializer=trunc_normal(0.005),
+                                    biases_initializer=tf.constant_initializer(0.1)):
+                    #        net = slim.conv2d(net, 4096, [5, 5], padding='VALID',
+                    #                          scope='fc6')
+                    net = slim.conv2d(net, 1024, [1, 1], scope='fc7')
+                    # Convert end_points_collection into a end_point dict.
+                    end_points = slim.utils.convert_collection_to_dict(
+                        end_points_collection)
+                    if num_classes:
+                        net = slim.conv2d(net, num_classes, [1, 1],
+                                          activation_fn=None,
+                                          normalizer_fn=None,
+                                          biases_initializer=tf.zeros_initializer(),
+                                          scope='fc8')
+                        if spatial_squeeze:
+                            net = tf.squeeze(net, [1, 2], name='fc8/squeezed')
+                        end_points[sc.name + '/fc8'] = net
     return net, end_points
 
 
@@ -168,7 +206,6 @@ def motion_net_lowe(flow):
                     motion_pred = tf.reduce_mean(motion_pred, [1, 2])
                 # Exp mask specific layers
                 if do_exp:
-                    print("get weight mask")
                     with tf.variable_scope('exp'):
                         upcnv5 = slim.conv2d_transpose(cnv5, 256, [3, 3], stride=2, scope='upcnv5')
 
