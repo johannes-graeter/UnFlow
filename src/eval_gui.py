@@ -128,7 +128,7 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
         _, flow, flow_bw, motion_angles_tf, inlier_prob_mask = unsupervised_loss(
             (im1, im2, input_shape, intrinsics),
             normalization=data_input.get_normalization(),
-            params=params, augment=False, return_flow=True)
+            params=params, augment_photometric=False, return_flow=True)
 
         if do_resize:
             im1 = resize_output(im1, height, width, 3)

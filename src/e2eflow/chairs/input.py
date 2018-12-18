@@ -39,5 +39,5 @@ class ChairsInput(Input):
     def input_raw(self, swap_images=True, shift=0):
         return super().input_raw(sequence=False,
                                  swap_images=swap_images,
-                                 needs_crop=False,
+                                 augment_crop=False,
                                  shift=shift)

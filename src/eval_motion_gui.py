@@ -257,7 +257,7 @@ def main(argv=None):
     print("shift by {} images".format(shift))
 
     def input_fn():
-        return input_fn0(needs_crop=True, center_crop=True, seed=None, swap_images=False, shift=shift)
+        return input_fn0(augment_crop=False, center_crop=True, seed=None, swap_images=False, shift=shift)
 
     results = []
     for name in FLAGS.ex.split(','):

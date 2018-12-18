@@ -138,7 +138,7 @@ def random_crop(tensors, size, seed=None, name=None):
         return results
 
 
-def data_augmentation(im, intrinsics, out_h, out_w):
+def data_augmentation(im1, im2, intrinsics, out_h, out_w):
     """Copied from SfmLearner"""
 
     def make_intrinsics_matrix(fx, fy, cx, cy):
@@ -153,37 +153,38 @@ def data_augmentation(im, intrinsics, out_h, out_w):
         return intrinsics
 
     # Random scaling
-    def random_scaling(im, intrinsics):
-        batch_size, in_h, in_w, _ = im.get_shape().as_list()
+    def random_scaling(im1, im2, intrinsics):
+        batch_size, in_h, in_w, _ = im1.get_shape().as_list()
         scaling = tf.random_uniform([2], 1, 1.15)
         x_scaling = scaling[0]
         y_scaling = scaling[1]
         out_h = tf.cast(in_h * y_scaling, dtype=tf.int32)
         out_w = tf.cast(in_w * x_scaling, dtype=tf.int32)
-        im = tf.image.resize_area(im, [out_h, out_w])
+        im1 = tf.image.resize_area(im1, [out_h, out_w])
+        im2 = tf.image.resize_area(im2, [out_h, out_w])
         fx = intrinsics[:, 0, 0] * x_scaling
         fy = intrinsics[:, 1, 1] * y_scaling
         cx = intrinsics[:, 0, 2] * x_scaling
         cy = intrinsics[:, 1, 2] * y_scaling
         intrinsics = make_intrinsics_matrix(fx, fy, cx, cy)
-        return im, intrinsics
+        return im1, im2, intrinsics
 
     # Random cropping
-    def random_cropping(im, intrinsics, out_h, out_w):
+    def random_cropping(im1, im2, intrinsics, out_h, out_w):
         # batch_size, in_h, in_w, _ = im.get_shape().as_list()
-        batch_size, in_h, in_w, _ = tf.unstack(tf.shape(im))
+        batch_size, in_h, in_w, _ = tf.unstack(tf.shape(im1))
         offset_y = tf.random_uniform([1], 0, in_h - out_h + 1, dtype=tf.int32)[0]
         offset_x = tf.random_uniform([1], 0, in_w - out_w + 1, dtype=tf.int32)[0]
-        im = tf.image.crop_to_bounding_box(
-            im, offset_y, offset_x, out_h, out_w)
+        im1 = tf.image.crop_to_bounding_box(im1, offset_y, offset_x, out_h, out_w)
+        im2 = tf.image.crop_to_bounding_box(im2, offset_y, offset_x, out_h, out_w)
         fx = intrinsics[:, 0, 0]
         fy = intrinsics[:, 1, 1]
         cx = intrinsics[:, 0, 2] - tf.cast(offset_x, dtype=tf.float32)
         cy = intrinsics[:, 1, 2] - tf.cast(offset_y, dtype=tf.float32)
         intrinsics = make_intrinsics_matrix(fx, fy, cx, cy)
-        return im, intrinsics
+        return im1, im2, intrinsics
 
-    im, intrinsics = random_scaling(im, intrinsics)
-    im, intrinsics = random_cropping(im, intrinsics, out_h, out_w)
-    im = tf.cast(im, dtype=tf.uint8)
-    return im, intrinsics
+    im1, im2, intrinsics = random_scaling(im1, im2, intrinsics)
+    im1, im2, intrinsics = random_cropping(im1, im2, intrinsics, out_h, out_w)
+    # im = tf.cast(im, dtype=tf.uint8)
+    return im1, im2, intrinsics
