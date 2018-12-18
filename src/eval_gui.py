@@ -125,7 +125,7 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
             im1 = resize_input(im1, height, width, resized_h, resized_w)
             im2 = resize_input(im2, height, width, resized_h, resized_w)  # TODO adapt train.py
 
-        _, flow, flow_bw, motion_angles_tf = unsupervised_loss(
+        _, flow, flow_bw, motion_angles_tf, inlier_prob_mask = unsupervised_loss(
             (im1, im2, input_shape, intrinsics),
             normalization=data_input.get_normalization(),
             params=params, augment=False, return_flow=True)
@@ -135,6 +135,10 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
             im2 = resize_output(im2, height, width, 3)
             flow = resize_output_flow(flow, height, width, 2)
             flow_bw = resize_output_flow(flow_bw, height, width, 2)
+            inlier_prob_mask = resize_output(inlier_prob_mask, height, width, 1)
+
+        # Stack inlier prob_mask 3 times
+        inlier_prob_mask_stacked = tf.concat((inlier_prob_mask, inlier_prob_mask, inlier_prob_mask), axis=3)
 
         flow_fw_int16 = flow_to_int16(flow)
         flow_bw_int16 = flow_to_int16(flow_bw)
@@ -176,6 +180,7 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
                            # (flow_to_color(flow_occ, mask_occ), 'flow truth'),
                            (flow_error_image(flow, flow_occ, mask_occ, mask_noc),
                             'flow error'),  # (blue: correct, red: wrong, dark: occluded)
+                           (inlier_prob_mask_stacked, 'inlier_prob'),
                            (im1 / 255, 'im1'),
                            ]
 
@@ -193,6 +198,7 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
                            (im1_diff / 255, 'brightness error'),
                            (flow_to_color(flow), 'flow'),
                            (flow_to_color(flow_gt, mask), 'gt'),
+                           (inlier_prob_mask_stacked, 'inlier_prob'),
                            (im1 / 255, 'im1'),
                            ]
 
@@ -205,6 +211,7 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
                            # (im2 / 255, 'second image', 1, 0),
                            # (im2_diff / 255, '|first - second|', 1, 2),
                            (flow_to_color(flow), 'flow prediction'),
+                           (inlier_prob_mask_stacked, 'inlier_prob'),
                            (im1 / 255, 'im1')
                            ]
             scalar_slots = []
@@ -247,11 +254,13 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
             try:
                 num_iters = 0
                 while not coord.should_stop() and (max_iter is None or num_iters != max_iter):
-                    all_results = sess.run([flow, flow_bw, flow_fw_int16, flow_bw_int16, motion_angles_tf] + all_ops)
+                    all_results = sess.run(
+                        [flow, flow_bw, flow_fw_int16, flow_bw_int16, motion_angles_tf] + all_ops)
                     # JG: get flow
                     flows.append(all_results[0])
                     # JG: get motion
                     motion_angles.append(all_results[4])
+
                     flow_fw_res, flow_bw_res, flow_fw_int16_res, flow_bw_int16_res = all_results[:4]
                     all_results = all_results[5:]
                     image_results = all_results[:num_ims]

@@ -1,13 +1,12 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.distributions import Normal
+from tensorflow.python.ops import math_ops
 
 from .image_warp import image_warp
-from ..ops import forward_warp
-
-from tensorflow.python.ops import math_ops
 from .util import epipolar_errors
 from .util import get_fundamental_matrix
+from ..ops import forward_warp
 
 DISOCC_THRESH = 0.8
 
@@ -387,7 +386,8 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
 
     # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
-    loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, inlier_prob, normalize=True, debug=True))
+    loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, tf.squeeze(inlier_prob, axis=3)
+                                                , normalize=True, debug=True))
 
     # Add loss
     tf.losses.add_loss(tf.scalar_mul(weight, loss))

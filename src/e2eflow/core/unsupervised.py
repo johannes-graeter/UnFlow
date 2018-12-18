@@ -163,7 +163,7 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     # intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw. 
     # Perhaps use loss directly on non-upsampled image?
-    inlier_probs_full_res = tf.squeeze(tf.image.resize_bilinear(tf.expand_dims(inlier_probs, axis=3), im_shape), axis=3)
+    inlier_probs_full_res = tf.image.resize_bilinear(tf.expand_dims(inlier_probs, axis=3), im_shape)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs_full_res, intrin)
 
     # Debug
@@ -172,8 +172,8 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     add_to_debug_output('funnet/final_flow', final_flow_fw)
     add_to_debug_output('funnet/input', flows_fw[0])
     add_to_debug_output('funnet/loss', fun_loss)
-    _track_image(tf.expand_dims(inlier_probs_full_res, axis=3), 'funnet/mask_full')
-    _track_image(tf.expand_dims(inlier_probs, axis=3), 'funnet/mask')
+    _track_image(inlier_probs_full_res, 'funnet/mask_full')
+    _track_image(inlier_probs, 'funnet/mask')
 
     if params.get('train_motion_only'):
         combined_loss = params.get('epipolar_loss_weight') * fun_loss
@@ -204,4 +204,4 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     if not return_flow:
         return final_loss
 
-    return final_loss, final_flow_fw, final_flow_bw, motion_angles
+    return final_loss, final_flow_fw, final_flow_bw, motion_angles, inlier_probs_full_res

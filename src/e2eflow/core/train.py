@@ -351,7 +351,7 @@ class Trainer:
             # im1 = resize_input(im1, height, width, 384, 1280)
             # im2 = resize_input(im2, height, width, 384, 1280)
 
-            _, flow, flow_bw, motion_angles = unsupervised_loss(
+            _, flow, flow_bw, motion_angles, inlier_prob_mask = unsupervised_loss(
                 (im1, im2, input_shape, intrinsics),
                 params=self.params,
                 normalization=self.normalization,
