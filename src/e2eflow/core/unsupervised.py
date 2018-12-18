@@ -45,12 +45,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         _track_image(im1_photo, 'augmented1')
         _track_image(im2_photo, 'augmented2')
     else:
-        im1_geo, im2_geo = im1, im2
         im1_photo, im2_photo = im1, im2
 
-    # Images for loss comparisons with values in [0, 1] (scale to original using * 255)
-    im1_norm = im1_geo
-    im2_norm = im2_geo
     # Images for neural network input with mean-zero values in [-1, 1]
     im1_photo = im1_photo - channel_mean
     im2_photo = im2_photo - channel_mean
@@ -75,15 +71,15 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     if full_resolution:
         layer_weights = [12.7, 5.5, 5.0, 4.35, 3.9, 3.4, 1.1]
         layer_patch_distances = [3, 3] + layer_patch_distances
-        im1_s = im1_norm
-        im2_s = im2_norm
+        im1_s = im1
+        im2_s = im2
         mask_s = border_mask
         final_flow_scale = FLOW_SCALE * 4
         final_flow_fw = flows_fw[0] * final_flow_scale
         final_flow_bw = flows_bw[0] * final_flow_scale
     else:
-        im1_s = downsample(im1_norm, 4)
-        im2_s = downsample(im2_norm, 4)
+        im1_s = downsample(im1, 4)
+        im2_s = downsample(im2, 4)
         mask_s = downsample(border_mask, 4)
         final_flow_scale = FLOW_SCALE
         final_flow_fw = tf.image.resize_bilinear(flows_fw[0], im_shape) * final_flow_scale * 4

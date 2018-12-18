@@ -154,12 +154,12 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
 
     # Random scaling
     def random_scaling(im1, im2, intrinsics):
-        batch_size, in_h, in_w = tf.unstack(tf.shape(im1))
+        batch_size, in_h, in_w, _ = tf.unstack(tf.shape(im1))
         scaling = tf.random_uniform([2], 1, 1.15)
         x_scaling = scaling[0]
         y_scaling = scaling[1]
-        out_h = tf.cast(in_h * y_scaling, dtype=tf.int32)
-        out_w = tf.cast(in_w * x_scaling, dtype=tf.int32)
+        out_h = tf.cast(tf.cast(in_h, tf.float32) * y_scaling, dtype=tf.int32)
+        out_w = tf.cast(tf.cast(in_w, tf.float32) * x_scaling, dtype=tf.int32)
         im1 = tf.image.resize_area(im1, [out_h, out_w])
         im2 = tf.image.resize_area(im2, [out_h, out_w])
         fx = intrinsics[:, 0, 0] * x_scaling
