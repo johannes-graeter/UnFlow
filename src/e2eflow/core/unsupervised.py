@@ -149,21 +149,26 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
             mask_s = downsample(mask_s, 2)
 
     # Add loss from epipolar geometry
-    motion_angles, mask_logits = funnet(flows_fw[0])
+    motion_angles, masks_logits = funnet(flows_fw[0])
 
     # Get regularization for explanation mask.
-    # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
+    reg_losses_exp_mask = []
+    # for mask_logits in masks_logits:
+    #     # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
+    #     ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
+    #     # Regularization loss must be done before converting to probability.
+    #     reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
+    mask_logits=masks_logits[0]
     ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
-    # Regularization loss must be done before converting to probability.
-    reg_loss_exp_mask = compute_exp_reg_loss(mask_logits, ref_exp_mask)
+    reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
 
     # Convert mask of logits to inlier probability.
-    inlier_probs = get_inlier_prob_from_mask_logits(mask_logits)
+    inlier_probs = tf.expand_dims(get_inlier_prob_from_mask_logits(masks_logits[0]), axis=3)
 
     # intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw. 
     # Perhaps use loss directly on non-upsampled image?
-    inlier_probs_full_res = tf.image.resize_bilinear(tf.expand_dims(inlier_probs, axis=3), im_shape)
+    inlier_probs_full_res = tf.image.resize_bilinear(inlier_probs, im_shape)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs_full_res, intrin)
 
     # Debug
@@ -178,10 +183,13 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     if params.get('train_motion_only'):
         combined_loss = params.get('epipolar_loss_weight') * fun_loss
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
-        regularization_loss += reg_loss_exp_mask
     else:
         combined_loss += params.get('epipolar_loss_weight') * fun_loss
         regularization_loss = tf.losses.get_regularization_loss()
+
+    # Add regularization loss of masks.
+    for r in reg_losses_exp_mask:
+        regularization_loss += r
 
     final_loss = combined_loss + regularization_loss
     _track_loss(final_loss, 'loss/combined')

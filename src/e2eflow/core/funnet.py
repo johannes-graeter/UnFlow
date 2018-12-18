@@ -1,7 +1,6 @@
 import tensorflow as tf
 
-from .funnet_architectures import custom_frontend, trunc_normal, exp_mask_layers
-from .util import add_to_debug_output
+from .funnet_architectures import custom_frontend, exp_mask_layers, trunc_normal
 
 slim = tf.contrib.slim
 
@@ -15,18 +14,19 @@ def funnet(flow):
     with tf.variable_scope('funnet') as sc:
         # Frontend
         # Get flow feature map from fully convolutional frontend.
-        net, end_points = frontend(flow, scope=sc.original_name_scope)
+        conv_activations, end_points = frontend(flow, scope=sc.original_name_scope)
 
         # Mask layers
-        [mask, _, _, _], end_points_mask = exp_mask_layers(net, 2, scope=sc.original_name_scope)
+        masks, end_points_mask = exp_mask_layers(conv_activations, 2, scope=sc.original_name_scope)
         end_points.update(end_points_mask)
 
         # Backend
+        #  Reduce information for fully connected.
         # Use conv2d instead of fully_connected layers.
+        net = conv_activations[-1]
         net = slim.conv2d(net, 1024, [1, 1], weights_initializer=trunc_normal(0.005), scope='fc7')
         end_points[sc.name + '/fc7'] = net
 
-        # Reduce information for fully connected.
         net = slim.conv2d(net, 10, [1, 1], weights_initializer=trunc_normal(0.005), scope='fc8')
         end_points[sc.name + '/fc8'] = net
 
@@ -47,4 +47,4 @@ def funnet(flow):
             pi = 3.14159265358979323846
             motion_angles = tf.scalar_mul(pi, motion_angles)
 
-            return motion_angles, mask
+            return motion_angles, masks
