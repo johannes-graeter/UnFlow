@@ -153,14 +153,14 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
 
     # Get regularization for explanation mask.
     reg_losses_exp_mask = []
-    # for mask_logits in masks_logits:
-    #     # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
-    #     ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
-    #     # Regularization loss must be done before converting to probability.
-    #     reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
-    mask_logits=masks_logits[0]
-    ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
-    reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
+    for mask_logits in masks_logits:
+        # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
+        ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
+        # Regularization loss must be done before converting to probability.
+        reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
+   # mask_logits=masks_logits[0]
+   # ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
+   # reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
 
     # Convert mask of logits to inlier probability.
     inlier_probs = tf.expand_dims(get_inlier_prob_from_mask_logits(masks_logits[0]), axis=3)
