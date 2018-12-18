@@ -128,7 +128,8 @@ def exp_mask_layers(conv_activations, mask_channels, scope='exp'):
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask2, "mask2")
 
-            icnv1 = decoder_stage(icnv2, 2, [7, 7], stride=2, scope='upcnv1', skip_connection=None)
+            # That last stage is a bit strange but copied from disp_net
+            icnv1 = decoder_stage(icnv2, 16, [7, 7], stride=2, scope='upcnv1', skip_connection=mask2)
             mask1 = slim.conv2d(icnv1, mask_channels, [7, 7], stride=1, scope='mask1',
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask1, "mask1")
