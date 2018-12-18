@@ -184,7 +184,17 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
         intrinsics = make_intrinsics_matrix(fx, fy, cx, cy)
         return im1, im2, intrinsics
 
+    do_expand=(len(im1.shape.as_list())<4)
+    if do_expand:
+        im1=tf.expand_dims(im1,axis=0)
+        im2=tf.expand_dims(im2,axis=0)
+        intrinsics=tf.expand_dims(intrinsics,axis=0)
     im1, im2, intrinsics = random_scaling(im1, im2, intrinsics)
     im1, im2, intrinsics = random_cropping(im1, im2, intrinsics, out_h, out_w)
+
+    if do_expand:
+        im1=tf.squeeze(im1,axis=0)
+        im2=tf.squeeze(im2,axis=0)
+        intrinsics=tf.squeeze(intrinsics,axis=0)
     # im = tf.cast(im, dtype=tf.uint8)
     return im1, im2, intrinsics
