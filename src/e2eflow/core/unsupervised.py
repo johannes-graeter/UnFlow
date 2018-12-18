@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .augment import random_affine, random_photometric
+from .augment import data_augmentation, random_photometric
 from .downsample import downsample
 from .flow_util import flow_to_color
 from .flownet import flownet, FLOW_SCALE
@@ -22,7 +22,7 @@ def _track_image(op, name):
     tf.add_to_collection('train_images', tf.identity(op, name=name))
 
 
-def unsupervised_loss(batch, params, normalization=None, augment=False,
+def unsupervised_loss(batch, params, normalization=None, augment_photometric=True,
                       return_flow=False):
     channel_mean = tf.constant(normalization[0]) / 255.0
     im1, im2, _, intrin = batch
@@ -37,27 +37,11 @@ def unsupervised_loss(batch, params, normalization=None, augment=False,
     _track_image(im1, 'orig1')
     _track_image(im2, 'orig2')
 
-    if augment:
-        raise Exception("Implement intrinsics from augmentation")
-        im1_geo, im2_geo, border_mask_global = random_affine(
-            [im1, im2, border_mask],
-            horizontal_flipping=True,
-            min_scale=0.9, max_scale=1.1
-        )
-
-        # augment locally
-        im2_geo, border_mask_local = random_affine(
-            [im2_geo, border_mask],
-            min_scale=0.9, max_scale=1.1
-        )
-        border_mask = border_mask_local * border_mask_global
-
-        im1_photo, im2_photo = random_photometric(
-            [im1_geo, im2_geo],
-            noise_stddev=0.04, min_contrast=-0.3, max_contrast=0.3,
-            brightness_stddev=0.02, min_colour=0.9, max_colour=1.1,
-            min_gamma=0.7, max_gamma=1.5)
-
+    if augment_photometric:
+        im1_photo, im2_photo = random_photometric([im1, im2],
+                                                  noise_stddev=0.04, min_contrast=-0.3, max_contrast=0.3,
+                                                  brightness_stddev=0.02, min_colour=0.9, max_colour=1.1,
+                                                  min_gamma=0.7, max_gamma=1.5)
         _track_image(im1_photo, 'augmented1')
         _track_image(im2_photo, 'augmented2')
     else:

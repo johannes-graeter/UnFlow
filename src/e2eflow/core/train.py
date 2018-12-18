@@ -355,7 +355,7 @@ class Trainer:
                 (im1, im2, input_shape, intrinsics),
                 params=self.params,
                 normalization=self.normalization,
-                augment=False, return_flow=True)
+                augment_photometric=False, return_flow=True)
 
             # im1 = resize_output(im1, height, width, 3)
             # im2 = resize_output(im2, height, width, 3)

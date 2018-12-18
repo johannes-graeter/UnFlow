@@ -67,11 +67,11 @@ def main(argv=None):
 
         tr = Trainer(
             lambda shift: kinput.input_raw(swap_images=False,
-                                           needs_crop=True,
+                                           augment_crop=True,
                                            center_crop=True,
                                            shift=shift * run_config['batch_size']),
             lambda: einput.input_raw(swap_images=False,
-                                     needs_crop=True,
+                                     augment_crop=False,
                                      center_crop=True),
             params=kconfig,
             normalization=kinput.get_normalization(),

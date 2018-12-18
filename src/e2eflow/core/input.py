@@ -4,7 +4,7 @@ import random
 import numpy as np
 import tensorflow as tf
 
-from .augment import random_crop
+from .augment import data_augmentation
 
 
 def resize_input(t, height, width, resized_h, resized_w):
@@ -148,7 +148,7 @@ class Input:
         return calib
 
     def input_raw(self, swap_images=True, sequence=True,
-                  needs_crop=True, shift=0, seed=0,
+                  augment_crop=True, shift=0, seed=0,
                   center_crop=False, skip=0):
         """Constructs input of raw data.
 
@@ -226,12 +226,16 @@ class Input:
 
             shape_before_preproc = tf.shape(image_1)
 
-            if needs_crop:
-                if center_crop:
-                    image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
-                    image_2, _ = self._resize_crop_or_pad(image_2)
-                else:
-                    image_1, image_2 = random_crop([image_1, image_2], [height, width, 3])
+            if augment_crop:
+                out_height, out_width = self.dims
+                img_h, img_w, ch = image_1.shape.as_list()
+                if out_height > img_h or out_width > img_w:
+                    raise Exception("No crop for augmentation possible, input image too small.")
+                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_height,
+                                                               out_w=out_width)
+            elif center_crop:
+                image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
+                image_2, _ = self._resize_crop_or_pad(image_2)
             else:
                 image_1 = tf.reshape(image_1, [height, width, 3])
                 image_2 = tf.reshape(image_2, [height, width, 3])
