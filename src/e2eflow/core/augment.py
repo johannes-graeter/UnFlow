@@ -143,7 +143,7 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
 
     def make_intrinsics_matrix(fx, fy, cx, cy):
         # Assumes batch input
-        batch_size = fx.get_shape().as_list()[0]
+        batch_size = tf.shape(fx)[0]
         zeros = tf.zeros_like(fx)
         r1 = tf.stack([fx, zeros, cx], axis=1)
         r2 = tf.stack([zeros, fy, cy], axis=1)
@@ -154,7 +154,7 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
 
     # Random scaling
     def random_scaling(im1, im2, intrinsics):
-        batch_size, in_h, in_w, _ = im1.get_shape().as_list()
+        batch_size, in_h, in_w = tf.unstack(tf.shape(im1))
         scaling = tf.random_uniform([2], 1, 1.15)
         x_scaling = scaling[0]
         y_scaling = scaling[1]
@@ -171,7 +171,6 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
 
     # Random cropping
     def random_cropping(im1, im2, intrinsics, out_h, out_w):
-        # batch_size, in_h, in_w, _ = im.get_shape().as_list()
         batch_size, in_h, in_w, _ = tf.unstack(tf.shape(im1))
         offset_y = tf.random_uniform([1], 0, in_h - out_h + 1, dtype=tf.int32)[0]
         offset_x = tf.random_uniform([1], 0, in_w - out_w + 1, dtype=tf.int32)[0]
@@ -184,17 +183,18 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
         intrinsics = make_intrinsics_matrix(fx, fy, cx, cy)
         return im1, im2, intrinsics
 
-    do_expand=(len(im1.shape.as_list())<4)
+    do_expand = (len(im1.shape.as_list()) < 4)
     if do_expand:
-        im1=tf.expand_dims(im1,axis=0)
-        im2=tf.expand_dims(im2,axis=0)
-        intrinsics=tf.expand_dims(intrinsics,axis=0)
+        im1 = tf.expand_dims(im1, axis=0)
+        im2 = tf.expand_dims(im2, axis=0)
+        intrinsics = tf.expand_dims(intrinsics, axis=0)
+
     im1, im2, intrinsics = random_scaling(im1, im2, intrinsics)
     im1, im2, intrinsics = random_cropping(im1, im2, intrinsics, out_h, out_w)
 
     if do_expand:
-        im1=tf.squeeze(im1,axis=0)
-        im2=tf.squeeze(im2,axis=0)
-        intrinsics=tf.squeeze(intrinsics,axis=0)
-    # im = tf.cast(im, dtype=tf.uint8)
+        im1 = tf.squeeze(im1, axis=0)
+        im2 = tf.squeeze(im2, axis=0)
+        intrinsics = tf.squeeze(intrinsics, axis=0)
+
     return im1, im2, intrinsics
