@@ -40,19 +40,27 @@ def custom_frontend(inputs, scope='custom_frontend'):
         with tf.variable_scope(scope, 'custom_frontend', [inputs]) as sc:
             end_points_collection = sc.original_name_scope  # + '_end_points'
 
+            def encoder_unit(input, depth, kernel_size, stride, scope_name):
+                cnv1 = slim.conv2d(input, depth, kernel_size, stride=stride, scope=scope_name)
+                cnv1b = slim.conv2d(cnv1, depth, kernel_size, stride=1, scope=scope_name + 'b')
+                return cnv1b
+
             # Collect outputs for conv2d, fully_connected and max_pool2d.
             with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
                 # This is same as compression layer for lowe's net with stride 1 for last conv layer
                 # for larger width and height
                 cnv1 = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
-                # cnv1b = slim.conv2d(cnv1, 16, [7, 7], stride=1, scope='cnv1b')
                 cnv2 = slim.conv2d(cnv1, 32, [5, 5], stride=2, scope='cnv2')
-                # cnv2b = slim.conv2d(cnv2, 32, [5, 5], stride=1, scope='cnv2b')
                 cnv3 = slim.conv2d(cnv2, 64, [3, 3], stride=2, scope='cnv3')
-                # cnv3b = slim.conv2d(cnv3, 64, [3, 3], stride=1, scope='cnv3b')
                 cnv4 = slim.conv2d(cnv3, 128, [3, 3], stride=2, scope='cnv4')
-                # cnv4b = slim.conv2d(cnv4, 128, [3, 3], stride=1, scope='cnv4b')
                 cnv5 = slim.conv2d(cnv4, 256, [3, 3], stride=1, scope='cnv5')
+
+                # # This is same as dispnet
+                # cnv1 = encoder_unit(inputs, 16, [7, 7], stride=2, scope='cnv1')
+                # cnv2 = encoder_unit(cnv1, 32, [5, 5], stride=2, scope='cnv2')
+                # cnv3 = encoder_unit(cnv2, 64, [3, 3], stride=2, scope='cnv3')
+                # cnv4 = encoder_unit(cnv3, 128, [3, 3], stride=2, scope='cnv4')
+                # cnv5 = encoder_unit(cnv4, 256, [3, 3], stride=1, scope='cnv5')
 
                 # Convert end_points_collection into a end_point dict.
                 end_points = slim.utils.convert_collection_to_dict(
@@ -86,16 +94,16 @@ def exp_mask_layers(conv_activations, mask_channels, scope='exp'):
     :return end_points: dict for layers end_point collection.
     """
 
-    def do_skip_connection(layer, skip_connection):
+    def add_skip_connection(layer, skip_connection):
         layer_resize = _resize_like(layer, skip_connection)
         # We could also concatenate but that adds variables.
         # return tf.add(layer_resize, skip_connection)
         return tf.concat([layer_resize, skip_connection], axis=3)
 
-    def decoder_stage(cnv, depth, kernel_size, stride, scope, skip_connection=None):
+    def decoder_unit(cnv, depth, kernel_size, stride, scope, skip_connection=None):
         upcnv = slim.conv2d_transpose(cnv, depth, kernel_size, stride=stride, scope=scope)
         if skip_connection is not None:
-            upcnv = do_skip_connection(upcnv, skip_connection)
+            upcnv = add_skip_connection(upcnv, skip_connection)
         icnv = slim.conv2d(upcnv, depth, kernel_size, stride=1, scope='i' + scope)
         return icnv
 
@@ -112,25 +120,25 @@ def exp_mask_layers(conv_activations, mask_channels, scope='exp'):
                 print(c.shape.as_list())
 
             # Is there a bug in transposing in SFMLearner? Adapt to scheme from struct2depth
-            icnv5 = decoder_stage(bottleneck, 128, [3, 3], stride=1, scope='upcnv5', skip_connection=cnv4)
+            icnv5 = decoder_unit(bottleneck, 128, [3, 3], stride=1, scope='upcnv5', skip_connection=cnv4)
 
-            icnv4 = decoder_stage(icnv5, 64, [3, 3], stride=2, scope='upcnv4', skip_connection=cnv3)
+            icnv4 = decoder_unit(icnv5, 64, [3, 3], stride=2, scope='upcnv4', skip_connection=cnv3)
             mask4 = slim.conv2d(icnv4, mask_channels, [3, 3], stride=1, scope='mask4',
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask4, "mask4")
 
-            icnv3 = decoder_stage(icnv4, 32, [3, 3], stride=2, scope='upcnv3', skip_connection=cnv2)
+            icnv3 = decoder_unit(icnv4, 32, [3, 3], stride=2, scope='upcnv3', skip_connection=cnv2)
             mask3 = slim.conv2d(icnv3, mask_channels, [3, 3], stride=1, scope='mask3',
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask3, "mask3")
 
-            icnv2 = decoder_stage(icnv3, 16, [5, 5], stride=2, scope='upcnv2', skip_connection=cnv1)
+            icnv2 = decoder_unit(icnv3, 16, [5, 5], stride=2, scope='upcnv2', skip_connection=cnv1)
             mask2 = slim.conv2d(icnv2, mask_channels, [5, 5], stride=1, scope='mask2',
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask2, "mask2")
 
             # That last stage is a bit strange but copied from disp_net
-            icnv1 = decoder_stage(icnv2, 16, [7, 7], stride=2, scope='upcnv1', skip_connection=mask2)
+            icnv1 = decoder_unit(icnv2, 16, [7, 7], stride=2, scope='upcnv1', skip_connection=mask2)
             mask1 = slim.conv2d(icnv1, mask_channels, [7, 7], stride=1, scope='mask1',
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask1, "mask1")
