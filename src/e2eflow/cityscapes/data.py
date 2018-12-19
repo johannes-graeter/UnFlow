@@ -1,11 +1,6 @@
 import os
-import sys
-
-import numpy as np
-import matplotlib.image as mpimg
 
 from ..core.data import Data
-from ..util import tryremove
 
 
 class CityscapesData(Data):
@@ -21,18 +16,20 @@ class CityscapesData(Data):
         pass
 
     def get_raw_dirs(self):
-       top_dir = os.path.join(self.current_dir, 'cs', 'leftImg8bit_sequence_trainvaltest')
-       if not os.path.isdir(top_dir):
-         raise RuntimeError(
-             "Cityscapes data missing.\n"
-             "Download 'leftImg8bit_sequence_trainvaltest.zip (324GB)' "
-             "from https://www.cityscapes-dataset.com/ and store in <data_dir>/cs.")
-       dirs = []
-       splits = os.listdir(top_dir)
-       for split in splits:
-           split_path = os.path.join(top_dir, split)
-           cities = os.listdir(split_path)
-           for city in cities:
-               city_path = os.path.join(split_path, city)
-               dirs.append(city_path)
-       return dirs
+        split = "train"
+        img_dir = os.path.join(self.current_dir, 'leftImg8bit_sequence', split)
+        city_list = os.listdir(img_dir)
+        dirs = []
+        for city in city_list:
+            city_path = os.path.join(img_dir, city)
+            dirs.append(city_path)
+        return dirs
+
+    def get_intrinsic_dirs(self):
+        calibs = {}
+        for extract_path, calib_path in zip(*self._get_paths()):
+            image_folders = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            calib_file = os.path.join(calib_path, self.calib_name)
+            for f, ident in zip(image_folders, self.calib_identifiers):
+                calibs[f] = [calib_file, ident]
+        return calibs
