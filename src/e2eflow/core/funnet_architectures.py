@@ -45,20 +45,21 @@ def custom_frontend(inputs, scope='custom_frontend'):
                 # This is same as compression layer for lowe's net with stride 1 for last conv layer
                 # for larger width and height
                 cnv1 = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
-                cnv1b = slim.conv2d(cnv1, 16, [7, 7], stride=1, scope='cnv1b')
+                # cnv1b = slim.conv2d(cnv1, 16, [7, 7], stride=1, scope='cnv1b')
                 cnv2 = slim.conv2d(cnv1, 32, [5, 5], stride=2, scope='cnv2')
-                cnv2b = slim.conv2d(cnv2, 32, [5, 5], stride=1, scope='cnv2b')
+                # cnv2b = slim.conv2d(cnv2, 32, [5, 5], stride=1, scope='cnv2b')
                 cnv3 = slim.conv2d(cnv2, 64, [3, 3], stride=2, scope='cnv3')
-                cnv3b = slim.conv2d(cnv3, 64, [3, 3], stride=1, scope='cnv3b')
+                # cnv3b = slim.conv2d(cnv3, 64, [3, 3], stride=1, scope='cnv3b')
                 cnv4 = slim.conv2d(cnv3, 128, [3, 3], stride=2, scope='cnv4')
-                cnv4b = slim.conv2d(cnv4, 128, [3, 3], stride=1, scope='cnv4b')
+                # cnv4b = slim.conv2d(cnv4, 128, [3, 3], stride=1, scope='cnv4b')
                 cnv5 = slim.conv2d(cnv4, 256, [3, 3], stride=1, scope='cnv5')
 
                 # Convert end_points_collection into a end_point dict.
                 end_points = slim.utils.convert_collection_to_dict(
                     end_points_collection)
 
-        return [cnv1b, cnv2b, cnv3b, cnv4b, cnv5], end_points
+        # return [cnv1b, cnv2b, cnv3b, cnv4b, cnv5], end_points
+        return [cnv1, cnv2, cnv3, cnv4, cnv5], end_points
 
 
 def _resize_like(inputs, ref):
