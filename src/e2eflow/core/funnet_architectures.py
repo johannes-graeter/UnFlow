@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from .resnet_v2 import resnet_v2, resnet_v2_block
 # Debug
 from .util import get_inlier_prob_from_mask_logits
 
@@ -31,6 +32,42 @@ def default_frontend_arg_scope(weight_decay=0.0005):
         with slim.arg_scope([slim.conv2d], padding='SAME'):
             with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
                 return arg_sc
+
+
+def custom_frontend_resnet(inputs, is_training=True, scope='custom_frontend'):
+    print("inputs", inputs.shape.as_list())
+    """Inspired by pose_exp_net from SFM Learner and simple_sencoder from struct2depth (b-layers)"""
+    with slim.arg_scope(default_frontend_arg_scope(0.05)):
+        with tf.variable_scope(scope, 'custom_frontend_resnet', [inputs]) as sc:
+            end_points_collection = sc.original_name_scope  # + '_end_points'
+
+            def custom_resnet(inputs):
+                """ResNet-50 model of [1]. See resnet_v2() for arg and return description."""
+                blocks = [
+                    resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
+                    resnet_v2_block('block2', base_depth=128, num_units=3, stride=2),
+                    resnet_v2_block('block3', base_depth=256, num_units=2, stride=1),
+                ]
+                return resnet_v2(inputs, blocks, num_classes=None, is_training=is_training,
+                                 global_pool=False, output_stride=None,
+                                 include_root_block=False, spatial_squeeze=True,
+                                 reuse=None, scope=scope)
+
+            # Collect outputs for conv2d, fully_connected and max_pool2d.
+            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
+                # Two strided convolutions (usually resnet 18 uses pooling, we don't want that)
+                cnv1 = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
+                cnv2 = slim.conv2d(cnv1, 32, [5, 5], stride=2, scope='cnv2')
+                cnv5, [cnv4, cnv3] = custom_resnet(cnv2)
+
+                print(cnv5, cnv4, cnv3)
+
+                # Convert end_points_collection into a end_point dict.
+                end_points = slim.utils.convert_collection_to_dict(
+                    end_points_collection)
+
+        # return [cnv1b, cnv2b, cnv3b, cnv4b, cnv5], end_points
+        return [cnv1, cnv2, cnv3, cnv4, cnv5], end_points
 
 
 def custom_frontend(inputs, scope='custom_frontend'):
