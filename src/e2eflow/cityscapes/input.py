@@ -1,9 +1,8 @@
 import json
 import os
-from glob import glob
 
 import numpy as np
-import scipy.misc
+import tensorflow as tf
 
 from ..core.input import Input
 
@@ -29,28 +28,22 @@ class CityscapesInput(Input):
         self.seq_length = seq_length
         assert seq_length % 2 != 0, 'seq_length must be odd!'
 
+    def _decode_calib(self, string_tensor, key):
+        def get_intrin_np(s):
+            obj = json.loads(s.decode('utf-8'))
+            d = obj['intrinsic']
+            return np.array([[d['fx'], 0., d['u0']], [0., d['fy'], d['v0']], [0., 0., 1.]], dtype=np.float32)
+
+        [parsed] = tf.py_func(get_intrin_np, [string_tensor], [tf.float32])
+
+        return parsed
+
     def get_train_example_with_idx(self, tgt_idx):
         tgt_frame_id = self.frames[tgt_idx]
         if not self.is_valid_example(tgt_frame_id):
             return False
         example = self.load_example(self.frames[tgt_idx])
         return example
-
-    def load_intrinsics(self, frame_id, split):
-        city, seq, _, _ = frame_id.split('_')
-        camera_file = os.path.join(self.dataset_dir, 'camera',
-                                   split, city, city + '_' + seq + '_*_camera.json')
-        camera_file = glob(camera_file)[0]
-        with open(camera_file, 'r') as f:
-            camera = json.load(f)
-        fx = camera['intrinsic']['fx']
-        fy = camera['intrinsic']['fy']
-        u0 = camera['intrinsic']['u0']
-        v0 = camera['intrinsic']['v0']
-        intrinsics = np.array([[fx, 0, u0],
-                               [0, fy, v0],
-                               [0, 0, 1]])
-        return intrinsics
 
     def is_valid_example(self, tgt_frame_id):
         city, snippet_id, tgt_local_frame_id, _ = tgt_frame_id.split('_')
@@ -95,13 +88,3 @@ class CityscapesInput(Input):
         example['folder_name'] = tgt_frame_id.split('_')[0]
         example['file_name'] = tgt_frame_id[:-1]
         return example
-
-    def scale_intrinsics(self, mat, sx, sy):
-        out = np.copy(mat)
-        out[0, 0] *= sx
-        out[0, 2] *= sx
-        out[1, 1] *= sy
-        out[1, 2] *= sy
-
-
-return out
