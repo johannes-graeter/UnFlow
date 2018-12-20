@@ -1,3 +1,4 @@
+import glob
 import os
 
 from ..core.data import Data
@@ -15,21 +16,32 @@ class CityscapesData(Data):
     def _fetch_if_missing(self):
         pass
 
-    def get_raw_dirs(self):
+    def _get_paths(self, folder_name):
         split = "train"
-        img_dir = os.path.join(self.current_dir, 'leftImg8bit_sequence', split)
+        img_dir = os.path.join(self.current_dir, folder_name, split)
         city_list = os.listdir(img_dir)
         dirs = []
         for city in city_list:
-            city_path = os.path.join(img_dir, city)
-            dirs.append(city_path)
+            p = os.path.join(img_dir, city)
+            # Get paths should be sth. like ../../train/aachen/aachen_000212
+            city_paths = [os.join(p, "_".join(n.split("/")[-1].split("_")[:2])) for n in
+                          glob.glob(os.join(p, city + "_*"))]
+            # Treat every glob as own path.
+            dirs.extend(city_paths)
+        return dirs
+
+    def get_raw_dirs(self):
+        dirs = []
+        for extract_path in self._get_paths('leftImg8bit_sequence'):
+            image_folder = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            dirs.extend(image_folder)
         return dirs
 
     def get_intrinsic_dirs(self):
         calibs = {}
-        for extract_path, calib_path in zip(*self._get_paths()):
-            image_folders = [os.path.join(extract_path, n) for n in self.image_subdirs]
-            calib_file = os.path.join(calib_path, self.calib_name)
-            for f, ident in zip(image_folders, self.calib_identifiers):
-                calibs[f] = [calib_file, ident]
+        for path in zip(self._get_paths('camera')):
+            calib_file = glob.glob(os.path.join(path, "*.json"))
+            assert (len(calib_file) == 1)
+            calib_file = calib_file[0]
+            calibs[path] = [calib_file, ""]
         return calibs

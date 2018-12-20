@@ -3,6 +3,7 @@ import random
 
 import numpy as np
 import tensorflow as tf
+import glob
 
 from .augment import random_crop
 
@@ -174,7 +175,7 @@ class Input:
         filenames = []
         for dir_path in data_dirs:
 
-            files = os.listdir(dir_path)
+            files = glob.glob(dir_path+"*.png")  # That also support cityscapes.
             files.sort()
             if sequence:
                 steps = [1 + s for s in skip]
