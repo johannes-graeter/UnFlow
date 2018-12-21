@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .augment import data_augmentation, random_photometric
+from .augment import random_photometric
 from .downsample import downsample
 from .flow_util import flow_to_color
 from .flownet import flownet, FLOW_SCALE
@@ -133,11 +133,16 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Get regularization for explanation mask.
     reg_losses_exp_mask = []
-    for mask_logits in masks_logits:
-        # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
-        ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
-        # Regularization loss must be done before converting to probability.
-        reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
+    # for mask_logits in masks_logits:
+    #     # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
+    #     ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
+    #     # Regularization loss must be done before converting to probability.
+    #     reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
+
+    mask_logits = masks_logits[0]
+    ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
+    # Regularization loss must be done before converting to probability.
+    reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
 
     # Convert mask of logits to inlier probability.
     inlier_probs = tf.expand_dims(get_inlier_prob_from_mask_logits(masks_logits[0]), axis=3)
@@ -166,7 +171,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Add regularization loss of masks.
     for r in reg_losses_exp_mask:
-        regularization_loss += tf.scalar_mul(10.,r)
+        regularization_loss += tf.scalar_mul(3.0, r)
 
     final_loss = combined_loss + regularization_loss
     _track_loss(final_loss, 'loss/combined')
