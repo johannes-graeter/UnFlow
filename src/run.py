@@ -3,10 +3,11 @@ import os
 
 import tensorflow as tf
 
+from e2eflow.cityscapes.data import CityscapesData
+from e2eflow.cityscapes.input import CityscapesInput
 from e2eflow.core.train import Trainer
 from e2eflow.experiment import Experiment
-from e2eflow.kitti.data import KITTIDataOdometry
-from e2eflow.kitti.data import KITTIDataRaw
+from e2eflow.kitti.data import KITTIDataOdometry, KITTIDataRaw
 from e2eflow.kitti.input import KITTIInput
 from e2eflow.util import convert_input_strings
 
@@ -48,43 +49,56 @@ def main(argv=None):
 
     if 'kitti' in train_dataset:
         if train_dataset == 'kitti_raw':
-            kdata = KITTIDataRaw(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
-                                 development=run_config['development'], do_fetch=False)
+            data = KITTIDataRaw(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
+                                development=run_config['development'], do_fetch=False)
         elif train_dataset == 'kitti_odometry':
-            kdata = KITTIDataOdometry(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
-                                      development=run_config['development'], do_fetch=False)
+            data = KITTIDataOdometry(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
+                                     development=run_config['development'], do_fetch=False)
         else:
             raise Exception("Dataset {} is unknown".format(train_dataset))
-        kconfig = copy.deepcopy(experiment.config['train'])
-        kconfig.update(experiment.config['train_kitti'])
-        convert_input_strings(kconfig, dirs)
-        kiters = kconfig.get('num_iters', 0)
-        kinput = KITTIInput(data=kdata,
-                            batch_size=gpu_batch_size,
-                            normalize=False,
-                            skipped_frames=True,
-                            dims=(kconfig['height'], kconfig['width']))
+        config = copy.deepcopy(experiment.config['train'])
+        config.update(experiment.config['train_kitti'])
+        convert_input_strings(config, dirs)
+        iters = config.get('num_iters', 0)
+        input = KITTIInput(data=data,
+                           batch_size=gpu_batch_size,
+                           normalize=False,
+                           skipped_frames=True,
+                           dims=(config['height'], config['width']))
+    elif train_dataset == 'cityscapes':
+        data = CityscapesData(data_dir=dirs['data_training'], sub_dir="train", fast_dir=dirs.get('fast'),
+                              stat_log_dir=None,
+                              development=run_config['development'])
+        config = copy.deepcopy(experiment.config['train'])
+        config.update(experiment.config['train_cityscapes'])
+        convert_input_strings(config, dirs)
+        iters = config.get('num_iters', 0)
 
-        tr = Trainer(
-            lambda shift: kinput.input_raw(swap_images=False,
-                                           needs_crop=True,
-                                           center_crop=True,
-                                           shift=shift * run_config['batch_size']),
-            lambda: einput.input_raw(swap_images=False,
-                                     needs_crop=True,
-                                     center_crop=True),
-            params=kconfig,
-            normalization=kinput.get_normalization(),
-            train_summaries_dir=experiment.train_dir,
-            eval_summaries_dir=experiment.eval_dir,
-            experiment=FLAGS.ex,
-            ckpt_dir=experiment.save_dir,
-            debug=FLAGS.debug,
-            interactive_plot=run_config.get('interactive_plot'),
-            devices=devices)
-        tr.run(0, kiters)
+        input = CityscapesInput(data=data,
+                                batch_size=gpu_batch_size,
+                                normalize=False,
+                                skipped_frames=False,
+                                dims=(config['height'], config['width']))
     else:
         raise Exception("Only Kitti supported.")
+    tr = Trainer(
+        lambda shift: input.input_raw(swap_images=False,
+                                      needs_crop=True,
+                                      center_crop=True,
+                                      shift=shift * run_config['batch_size']),
+        lambda: einput.input_raw(swap_images=False,
+                                 needs_crop=True,
+                                 center_crop=True),
+        params=config,
+        normalization=input.get_normalization(),
+        train_summaries_dir=experiment.train_dir,
+        eval_summaries_dir=experiment.eval_dir,
+        experiment=FLAGS.ex,
+        ckpt_dir=experiment.save_dir,
+        debug=FLAGS.debug,
+        interactive_plot=run_config.get('interactive_plot'),
+        devices=devices)
+    tr.run(0, iters)
     if not FLAGS.debug:
         experiment.conclude()
 
