@@ -31,17 +31,13 @@ class CityscapesData(Data):
         return dirs
 
     def get_raw_dirs(self):
-        dirs = []
-        for extract_path in self._get_paths('leftImg8bit_sequence'):
-            image_folder = [os.path.join(extract_path, n) for n in self.image_subdirs]
-            dirs.extend(image_folder)
-        return dirs
+        return self._get_paths('leftImg8bit_sequence')
 
     def get_intrinsic_dirs(self):
         calibs = {}
-        for path in zip(self._get_paths('camera')):
-            calib_file = glob.glob(os.path.join(path, "*.json"))
+        for c_path, sequ_dir in zip(self._get_paths('camera'), self._get_raw_dirs()):
+            calib_file = glob.glob(os.path.join(c_path, "*.json"))
             assert (len(calib_file) == 1)
             calib_file = calib_file[0]
-            calibs[path] = [calib_file, ""]
+            calibs[sequ_dir] = [calib_file, ""]
         return calibs
