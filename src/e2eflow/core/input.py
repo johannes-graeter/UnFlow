@@ -148,6 +148,10 @@ class Input:
 
         return calib
 
+    def _preprocess_image(self, image, calib_tf=None):
+        """Standard prerocessing does nothing. If you need to prescale overwrite that."""
+        return image, calib_tf
+
     def input_raw(self, swap_images=True, sequence=True,
                   augment_crop=True, shift=0, seed=0,
                   center_crop=False, skip=0):
@@ -225,13 +229,16 @@ class Input:
             image_2 = read_png_image(filenames_2)
             calib_tf = self.read_calib(calib_filenames, keys)
 
+            image_1, calib_tf = self._preprocess_image(image_1, calib_tf)
+            image_2, _ = self._preprocess_image(image_2, None)
+
             shape_before_preproc = tf.shape(image_1)
 
             if augment_crop:
                 out_height, out_width = self.dims
-                #img_h, img_w, ch = image_1.shape.as_list()
-                #if (out_height > img_h) or (out_width > img_w):
-                    #raise Exception("No crop for augmentation possible, input image too small.")
+                # img_h, img_w, ch = image_1.shape.as_list()
+                # if (out_height > img_h) or (out_width > img_w):
+                # raise Exception("No crop for augmentation possible, input image too small.")
                 image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_height,
                                                                out_w=out_width)
             elif center_crop:

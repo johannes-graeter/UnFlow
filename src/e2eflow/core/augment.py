@@ -138,19 +138,20 @@ def random_crop(tensors, size, seed=None, name=None):
         return results
 
 
+def make_intrinsics_matrix(fx, fy, cx, cy):
+    # Assumes batch input
+    batch_size = tf.shape(fx)[0]
+    zeros = tf.zeros_like(fx)
+    r1 = tf.stack([fx, zeros, cx], axis=1)
+    r2 = tf.stack([zeros, fy, cy], axis=1)
+    r3 = tf.constant([0., 0., 1.], shape=[1, 3])
+    r3 = tf.tile(r3, [batch_size, 1])
+    intrinsics = tf.stack([r1, r2, r3], axis=1)
+    return intrinsics
+
+
 def data_augmentation(im1, im2, intrinsics, out_h, out_w):
     """Copied from SfmLearner"""
-
-    def make_intrinsics_matrix(fx, fy, cx, cy):
-        # Assumes batch input
-        batch_size = tf.shape(fx)[0]
-        zeros = tf.zeros_like(fx)
-        r1 = tf.stack([fx, zeros, cx], axis=1)
-        r2 = tf.stack([zeros, fy, cy], axis=1)
-        r3 = tf.constant([0., 0., 1.], shape=[1, 3])
-        r3 = tf.tile(r3, [batch_size, 1])
-        intrinsics = tf.stack([r1, r2, r3], axis=1)
-        return intrinsics
 
     # Random scaling
     def random_scaling(im1, im2, intrinsics, min_scale, max_scale):
