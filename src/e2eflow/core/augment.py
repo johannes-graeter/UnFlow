@@ -194,7 +194,7 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
     min_y_scale = tf.cast(out_h, tf.float32) / tf.cast(in_h, tf.float32)
     min_x_scale = tf.cast(out_w, tf.float32) / tf.cast(in_w, tf.float32)
     im1, im2, intrinsics = random_scaling(im1, im2, intrinsics, min_scale=[min_x_scale, min_y_scale],
-                                          max_scale=[1.15, 1.15])
+                                          max_scale=[1.05, 1.05])
     im1, im2, intrinsics = random_cropping(im1, im2, intrinsics, out_h, out_w)
 
     if do_expand:

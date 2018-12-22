@@ -36,10 +36,14 @@ class CityscapesInput(Input):
         return parsed
 
     def _preprocess_image(self, image, calib_tf=None):
-        scale = 1300.0 / 2048.
-        h, w, c = tf.unstack(tf.cast(tf.shape(image),tf.float32))
+        scale = 1200.0 / 2048.
+        crop_bottom = 200
+        h, w, c = tf.unstack(tf.shape(image))
         image = tf.expand_dims(image, axis=0)
-        image = tf.image.resize_bilinear(image, [tf.cast(tf.scalar_mul(scale,h), tf.int32), tf.cast(tf.scalar_mul(scale,w), tf.int32)])
+        tf.image.crop_to_bounding_box(image, 0, 0, h - crop_bottom, w)
+        image = tf.image.resize_bilinear(image,
+                                         [tf.cast(tf.scalar_mul(scale, tf.cast(h - crop_bottom, tf.float32)), tf.int32),
+                                          tf.cast(tf.scalar_mul(scale, tf.cast(w, tf.float32)), tf.int32)])
         image = tf.squeeze(image, axis=0)
         if calib_tf is not None:
             calib_tf = scale_intrinsics(calib_tf, scale, scale)
