@@ -13,7 +13,7 @@ def scale_intrinsics(calib, sx, sy):
     fy = tf.expand_dims(calib[1, 1] * sy, axis=0)
     cy = tf.expand_dims(calib[1, 2] * sy, axis=0)
 
-    return make_intrinsics_matrix(fx, fy, cx, cy)
+    return tf.squeeze(make_intrinsics_matrix(fx, fy, cx, cy), axis=0)
 
 
 class CityscapesInput(Input):
@@ -37,8 +37,10 @@ class CityscapesInput(Input):
 
     def _preprocess_image(self, image, calib_tf=None):
         scale = 1300.0 / 2048.
-        h, w, c = tf.unstack(tf.shape(image))
-        image = tf.image.resize_bilinear(image, [h * scale, w * scale])
-        if calib_tf:
+        h, w, c = tf.unstack(tf.cast(tf.shape(image),tf.float32))
+        image = tf.expand_dims(image, axis=0)
+        image = tf.image.resize_bilinear(image, [tf.cast(tf.scalar_mul(scale,h), tf.int32), tf.cast(tf.scalar_mul(scale,w), tf.int32)])
+        image = tf.squeeze(image, axis=0)
+        if calib_tf is not None:
             calib_tf = scale_intrinsics(calib_tf, scale, scale)
         return image, calib_tf
