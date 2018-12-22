@@ -1,3 +1,4 @@
+import glob
 import os
 import random
 
@@ -174,7 +175,7 @@ class Input:
         filenames = []
         for dir_path in data_dirs:
 
-            files = os.listdir(dir_path)
+            files = glob.glob(dir_path + "*.png")  # That also support cityscapes.
             files.sort()
             if sequence:
                 steps = [1 + s for s in skip]
@@ -243,6 +244,7 @@ class Input:
             if self.normalize:
                 image_1 = self._normalize_image(image_1)
                 image_2 = self._normalize_image(image_2)
+            print(calib_tf)
 
             return tf.train.batch(
                 [image_1, image_2, shape_before_preproc, calib_tf],

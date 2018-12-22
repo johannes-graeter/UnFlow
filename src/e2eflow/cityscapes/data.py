@@ -1,38 +1,46 @@
+import glob
 import os
-import sys
-
-import numpy as np
-import matplotlib.image as mpimg
 
 from ..core.data import Data
-from ..util import tryremove
 
 
 class CityscapesData(Data):
-    dirs = ['cs']
-
-    def __init__(self, data_dir, stat_log_dir=None,
+    def __init__(self, data_dir, sub_dir="train", stat_log_dir=None,
                  development=True, fast_dir=None):
         super().__init__(data_dir, stat_log_dir,
                          development=development,
-                         fast_dir=fast_dir)
+                         fast_dir=fast_dir,
+                         do_fetch=False
+                         )
+        self.sub_dir = sub_dir
 
     def _fetch_if_missing(self):
-        pass
+        raise NotImplementedError("Fetching for cityscapes data not implemented. Download it manually.")
+
+    def _get_paths(self, folder_name):
+        img_dir = os.path.join(self.current_dir, folder_name, self.sub_dir)
+        city_list = os.listdir(img_dir)
+        dirs = []
+        for city in sorted(city_list):
+            p = os.path.join(img_dir, city)
+            # Get paths should be sth. like ../../train/aachen/aachen_000212
+            city_paths = set([os.path.join(p, "_".join(n.split("/")[-1].split("_")[:2])) for n in
+                              glob.glob(os.path.join(p, city + "_*"))])
+            # Treat every glob as own path.
+            dirs.extend(sorted(city_paths))
+        return dirs
 
     def get_raw_dirs(self):
-       top_dir = os.path.join(self.current_dir, 'cs', 'leftImg8bit_sequence_trainvaltest')
-       if not os.path.isdir(top_dir):
-         raise RuntimeError(
-             "Cityscapes data missing.\n"
-             "Download 'leftImg8bit_sequence_trainvaltest.zip (324GB)' "
-             "from https://www.cityscapes-dataset.com/ and store in <data_dir>/cs.")
-       dirs = []
-       splits = os.listdir(top_dir)
-       for split in splits:
-           split_path = os.path.join(top_dir, split)
-           cities = os.listdir(split_path)
-           for city in cities:
-               city_path = os.path.join(split_path, city)
-               dirs.append(city_path)
-       return dirs
+        return self._get_paths('leftImg8bit_sequence')
+
+    def get_intrinsic_dirs(self):
+        calibs = {}
+        c_paths = self._get_paths('camera')
+        sequ_paths = self.get_raw_dirs()
+        assert (len(c_paths) == len(sequ_paths))
+        for c_path, sequ_path in zip(c_paths, sequ_paths):
+            calib_file = glob.glob(c_path + "*.json")
+            assert (len(calib_file) > 0)
+            calib_file = calib_file[0]
+            calibs[sequ_path] = [calib_file, ""]
+        return calibs
