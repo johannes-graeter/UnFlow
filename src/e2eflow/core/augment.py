@@ -155,11 +155,9 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
     # Random scaling
     def random_scaling(im1, im2, intrinsics, min_scale, max_scale):
         batch_size, in_h, in_w, _ = tf.unstack(tf.shape(im1))
-        scaling_x = tf.random_uniform([1], minval=min_scale[0], maxval=max_scale[0])
-        scaling_y = tf.random_uniform([1], minval=min_scale[1], maxval=max_scale[1])
+        x_scaling = tf.random_uniform([1], minval=min_scale[0], maxval=max_scale[0])[0]
+        y_scaling = tf.random_uniform([1], minval=min_scale[1], maxval=max_scale[1])[0]
 
-        x_scaling = scaling_x[0]
-        y_scaling = scaling_y[1]
         out_h = tf.cast(tf.cast(in_h, tf.float32) * y_scaling, dtype=tf.int32)
         out_w = tf.cast(tf.cast(in_w, tf.float32) * x_scaling, dtype=tf.int32)
         im1 = tf.image.resize_area(im1, [out_h, out_w])
@@ -192,8 +190,8 @@ def data_augmentation(im1, im2, intrinsics, out_h, out_w):
         intrinsics = tf.expand_dims(intrinsics, axis=0)
 
     _, in_h, in_w, _ = tf.unstack(tf.shape(im1))
-    min_y_scale = tf.cast(out_h, tf.float32) / in_h
-    min_x_scale = tf.cast(out_w, tf.float32) / in_w
+    min_y_scale = tf.cast(out_h, tf.float32) / tf.cast(in_h, tf.float32)
+    min_x_scale = tf.cast(out_w, tf.float32) / tf.cast(in_w, tf.float32)
     im1, im2, intrinsics = random_scaling(im1, im2, intrinsics, min_scale=[min_x_scale, min_y_scale],
                                           max_scale=[1.15, 1.15])
     im1, im2, intrinsics = random_cropping(im1, im2, intrinsics, out_h, out_w)
