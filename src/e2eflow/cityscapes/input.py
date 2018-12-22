@@ -20,5 +20,7 @@ class CityscapesInput(Input):
             return np.array([[d['fx'], 0., d['u0']], [0., d['fy'], d['v0']], [0., 0., 1.]], dtype=np.float32)
 
         [parsed] = tf.py_func(get_intrin_np, [string_tensor], [tf.float32])
+        #parsed = tf.reshape(parsed,[3, 3])  # fix the size
+        parsed.set_shape([3, 3])  # fix the size
 
         return parsed
