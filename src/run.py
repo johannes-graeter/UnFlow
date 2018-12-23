@@ -83,11 +83,11 @@ def main(argv=None):
         raise Exception("Only Kitti supported.")
     tr = Trainer(
         lambda shift: input.input_raw(swap_images=False,
-                                      augment_crop=True,
+                                      augment_crop=False,
                                       center_crop=True,
                                       shift=shift * run_config['batch_size']),
         lambda: einput.input_raw(swap_images=False,
-                                 augment_crop=True,
+                                 augment_crop=False,
                                  center_crop=True),
         params=config,
         normalization=input.get_normalization(),
