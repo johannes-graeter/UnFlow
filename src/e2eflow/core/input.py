@@ -196,8 +196,8 @@ class Input:
                         num_second = frame_name_to_num(files[i + 1])
                         if num_first + 1 != num_second:
                             continue
-                    fn1 = os.path.join(dir_path, files[i])
-                    fn2 = os.path.join(dir_path, files[i + 1])
+                    fn1 = files[i]
+                    fn2 = files[i + 1]
                     calib_dir, key = intrinsic_dirs[dir_path]
                     filenames.append((fn1, fn2, calib_dir, key))
 
