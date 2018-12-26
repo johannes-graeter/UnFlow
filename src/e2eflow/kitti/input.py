@@ -47,9 +47,9 @@ def convert_to_number(strings, mask):
 
 class KITTIInput(Input):
     def __init__(self, data, batch_size, dims=(320, 1152), *,
-                 num_threads=1, normalize=True, skipped_frames=False):
+                 num_threads=1, normalize=True):
         super().__init__(data, batch_size, dims, num_threads=num_threads,
-                         normalize=normalize, skipped_frames=skipped_frames)
+                         normalize=normalize)
 
     def _decode_calib(self, string_tensor, key):
         "key is 02 or 03, need to calcualte intrinsics from roation and projection matrix."

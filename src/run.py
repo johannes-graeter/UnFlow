@@ -63,7 +63,6 @@ def main(argv=None):
         input = KITTIInput(data=data,
                            batch_size=gpu_batch_size,
                            normalize=False,
-                           skipped_frames=True,
                            dims=(config['height'], config['width']))
     elif train_dataset == 'cityscapes':
         data = CityscapesData(data_dir=dirs['data_training'], sub_dir="train", fast_dir=dirs.get('fast'),
@@ -77,7 +76,6 @@ def main(argv=None):
         input = CityscapesInput(data=data,
                                 batch_size=gpu_batch_size,
                                 normalize=False,
-                                skipped_frames=False,
                                 dims=(config['height'], config['width']))
     else:
         raise Exception("Only Kitti supported.")
@@ -140,7 +138,6 @@ def main(argv=None):
 #     kinput = KITTIInput(data=kdata,
 #                         batch_size=gpu_batch_size,
 #                         normalize=False,
-#                         skipped_frames=True,
 #                         dims=(kconfig['height'], kconfig['width']))
 #     tr = Trainer(
 #           lambda shift: kinput.input_raw(swap_images=False,
@@ -171,7 +168,6 @@ def main(argv=None):
 #     kinput = KITTIInput(data=cdata,
 #                         batch_size=gpu_batch_size,
 #                         normalize=False,
-#                         skipped_frames=False,
 #                         dims=(kconfig['height'], kconfig['width']))
 #     tr = Trainer(
 #           lambda shift: kinput.input_raw(swap_images=False,

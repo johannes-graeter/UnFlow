@@ -40,15 +40,14 @@ class Input:
     stddev = 1 / 0.0039216
 
     def __init__(self, data, batch_size, dims, *,
-                 num_threads=1, normalize=True,
-                 skipped_frames=False):
+                 num_threads=1, normalize=True
+                 ):
         assert len(dims) == 2
         self.data = data
         self.dims = dims
         self.batch_size = batch_size
         self.num_threads = num_threads
         self.normalize = normalize
-        self.skipped_frames = skipped_frames
 
     def _frame_name_to_num(self, name):
         raise NotImplementedError("conversion from filename to frame to implemented.")
@@ -186,7 +185,7 @@ class Input:
                 assert len(files) % 2 == 0
             for step, stop in zip(steps, stops):
                 for i in range(0, stop, step):
-                    if self.skipped_frames and sequence:
+                    if sequence:
                         assert step == 1
                         num_first = self._frame_name_to_num(files[i])
                         num_second = self._frame_name_to_num(files[i + 1])
