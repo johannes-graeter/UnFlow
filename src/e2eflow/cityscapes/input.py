@@ -35,6 +35,12 @@ class CityscapesInput(Input):
 
         return parsed
 
+    def _frame_name_to_num(self, name):
+        stripped = name.split("/")[-1].split(".")[-2].split("_")[-2]
+        if stripped == '':
+            return 0
+        return int(stripped)
+
     def _preprocess_image(self, image, calib_tf=None):
         scale = 1200.0 / 2048.
         crop_bottom = 200

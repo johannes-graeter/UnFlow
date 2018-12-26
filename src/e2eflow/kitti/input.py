@@ -62,6 +62,12 @@ class KITTIInput(Input):
         calib = proj[:3, :3]
         return calib
 
+    def _frame_name_to_num(self, name):
+        stripped = name.split("/")[-1].split('.')[0].lstrip('0')
+        if stripped == '':
+            return 0
+        return int(stripped)
+
     def _preprocess_flow(self, gt):
         flow, mask = gt
         height, width = self.dims

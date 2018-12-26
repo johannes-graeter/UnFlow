@@ -35,13 +35,6 @@ def resize_output_flow(t, height, width, channels):
     return tf.reshape(tf.stack([u, v], axis=3), [batch, height, width, 2])
 
 
-def frame_name_to_num(name):
-    stripped = name.split('.')[0].lstrip('0')
-    if stripped == '':
-        return 0
-    return int(stripped)
-
-
 class Input:
     mean = [104.920005, 110.1753, 114.785955]
     stddev = 1 / 0.0039216
@@ -56,6 +49,9 @@ class Input:
         self.num_threads = num_threads
         self.normalize = normalize
         self.skipped_frames = skipped_frames
+
+    def _frame_name_to_num(self, name):
+        raise NotImplementedError("conversion from filename to frame to implemented.")
 
     def _resize_crop_or_pad(self, tensor, calib=None):
         height, width = self.dims
@@ -192,8 +188,8 @@ class Input:
                 for i in range(0, stop, step):
                     if self.skipped_frames and sequence:
                         assert step == 1
-                        num_first = frame_name_to_num(files[i])
-                        num_second = frame_name_to_num(files[i + 1])
+                        num_first = self._frame_name_to_num(files[i])
+                        num_second = self._frame_name_to_num(files[i + 1])
                         if num_first + 1 != num_second:
                             continue
                     fn1 = files[i]
