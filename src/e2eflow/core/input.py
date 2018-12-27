@@ -239,9 +239,10 @@ class Input:
                 image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
                 image_2, _ = self._resize_crop_or_pad(image_2)
 
-            # Reshape for fixing the size.
-            image_1 = tf.reshape(image_1, [out_h, out_w, 3])
-            image_2 = tf.reshape(image_2, [out_h, out_w, 3])
+            # Reshape for fixing the size if that hasn't been done already.
+            if image_1.shape.as_list()[0] is None:
+                image_1 = tf.reshape(image_1, [out_h, out_w, 3])
+                image_2 = tf.reshape(image_2, [out_h, out_w, 3])
 
             if self.normalize:
                 image_1 = self._normalize_image(image_1)
