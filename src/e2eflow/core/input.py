@@ -169,7 +169,7 @@ class Input:
 
         data_dirs = self.data.get_raw_dirs()
         intrinsic_dirs = self.data.get_intrinsic_dirs()
-        height, width = self.dims
+        out_h, out_w = self.dims
 
         filenames = []
         for dir_path in data_dirs:
@@ -230,23 +230,22 @@ class Input:
             shape_before_preproc = tf.shape(image_1)
 
             if augment_crop:
-                out_height, out_width = self.dims
                 # img_h, img_w, ch = image_1.shape.as_list()
                 # if (out_height > img_h) or (out_width > img_w):
                 # raise Exception("No crop for augmentation possible, input image too small.")
-                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_height,
-                                                               out_w=out_width)
+                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_h,
+                                                               out_w=out_w)
             elif center_crop:
                 image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
                 image_2, _ = self._resize_crop_or_pad(image_2)
-            else:
-                image_1 = tf.reshape(image_1, [height, width, 3])
-                image_2 = tf.reshape(image_2, [height, width, 3])
+
+            # Reshape for fixing the size.
+            image_1 = tf.reshape(image_1, [out_h, out_w, 3])
+            image_2 = tf.reshape(image_2, [out_h, out_w, 3])
 
             if self.normalize:
                 image_1 = self._normalize_image(image_1)
                 image_2 = self._normalize_image(image_2)
-            print(calib_tf)
 
             return tf.train.batch(
                 [image_1, image_2, shape_before_preproc, calib_tf],
