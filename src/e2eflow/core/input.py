@@ -75,12 +75,6 @@ class Input:
     def _normalize_image(self, image):
         return (image - self.mean) / self.stddev
 
-    def _preprocess_image(self, image):
-        image, _ = self._resize_image_fixed(image)
-        if self.normalize:
-            image = self._normalize_image(image)
-        return image
-
     def _input_images(self, image_dir, hold_out_inv=None):
         """Assumes that paired images are next to each other after ordering the
         files.
@@ -110,8 +104,15 @@ class Input:
 
         input_1 = read_png_image(filenames_1, 1)
         input_2 = read_png_image(filenames_2, 1)
-        image_1 = self._preprocess_image(input_1)
-        image_2 = self._preprocess_image(input_2)
+
+        def _preprocess_image(image):
+            image, _ = self._resize_image_fixed(image)
+            if self.normalize:
+                image = self._normalize_image(image)
+            return image
+
+        image_1 = _preprocess_image(input_1)
+        image_2 = _preprocess_image(input_2)
 
         image_1 = tf.print(image_1, [image_1.shape.as_list()])
         return tf.shape(input_1), image_1, image_2
@@ -143,7 +144,7 @@ class Input:
 
         return calib
 
-    def _preprocess_image(self, image, calib_tf=None):
+    def _preprocess_input(self, image, calib_tf=None):
         """Standard prerocessing does nothing. If you need to prescale overwrite that."""
         return image, calib_tf
 
@@ -224,8 +225,8 @@ class Input:
             image_2 = read_png_image(filenames_2)
             calib_tf = self.read_calib(calib_filenames, keys)
 
-            image_1, calib_tf = self._preprocess_image(image_1, calib_tf)
-            image_2, _ = self._preprocess_image(image_2, None)
+            image_1, calib_tf = self._preprocess_input(image_1, calib_tf)
+            image_2, _ = self._preprocess_input(image_2)
 
             shape_before_preproc = tf.shape(image_1)
 
