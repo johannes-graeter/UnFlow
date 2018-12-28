@@ -17,7 +17,7 @@ def funnet(flow):
         conv_activations, end_points = frontend(flow, scope=sc.original_name_scope)
 
         # Mask layers
-        masks, end_points_mask = exp_mask_layers(conv_activations, 2, scope=sc.original_name_scope)
+        masks, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
         end_points.update(end_points_mask)
 
         # Backend

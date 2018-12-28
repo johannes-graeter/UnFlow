@@ -146,6 +146,9 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Convert mask of logits to inlier probability.
     inlier_probs = tf.expand_dims(get_inlier_prob_from_mask_logits(masks_logits[0]), axis=3)
+    assert (inlier_probs.shape.as_list()[0] == flows_fw[0].shape.as_list()[0])
+    assert (inlier_probs.shape.as_list()[1] == flows_fw[0].shape.as_list()[1])
+    assert (inlier_probs.shape.as_list()[2] == flows_fw[0].shape.as_list()[2])
 
     # intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw. 
@@ -171,7 +174,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Add regularization loss of masks.
     for r in reg_losses_exp_mask:
-        regularization_loss += tf.scalar_mul(3.0, r)
+        regularization_loss += tf.scalar_mul(2.0, r)
 
     final_loss = combined_loss + regularization_loss
     _track_loss(final_loss, 'loss/combined')
