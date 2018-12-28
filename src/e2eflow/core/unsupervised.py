@@ -7,7 +7,7 @@ from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp_reg_loss
-from .util import add_to_debug_output, get_reference_explain_mask, get_inlier_prob_from_mask_logits
+from .util import add_to_debug_output, add_to_output, get_reference_explain_mask, get_inlier_prob_from_mask_logits
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -155,7 +155,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Debug
     for i in range(5):
-        add_to_debug_output('funnet/motion_angles/{}'.format(i), motion_angles[:, i])
+        add_to_output('funnet/motion_angles/{}'.format(i), motion_angles[:, i])
     add_to_debug_output('funnet/final_flow', final_flow_fw)
     add_to_debug_output('funnet/input', flows_fw[0])
     add_to_debug_output('funnet/loss', fun_loss)

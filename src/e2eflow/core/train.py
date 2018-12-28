@@ -108,7 +108,7 @@ def _add_variable_summaries():
             tensor_names = "motion_angles/batch{}/motion{}".format(i, j)
             tf.summary.scalar(tensor_names, ms[0][i, j])
 
-    # train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            # train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
 
 def _add_param_summaries():
@@ -125,8 +125,8 @@ def _add_image_summaries():
         tf.summary.image(tensor_name, im)
 
 
-def _add_debug_tensor_summaries():
-    ts = tf.get_collection('debug_tensors')
+def _add_tensor_summaries(collection='debug_tensors'):
+    ts = tf.get_collection(collection)
     for t in ts:
         name = re.sub('tower_[0-9]*/', '', t.op.name)
         tf.summary.scalar(name + '/mean', tf.reduce_mean(t))
@@ -186,7 +186,7 @@ class Trainer:
         # assert (max_iter - start_iter + 1) % save_interval == 0
         for i in range(start_iter, max_iter + 1, save_interval):
             self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            #self.eval(1)
+            # self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
@@ -202,9 +202,10 @@ class Trainer:
             _add_loss_summaries()
             _add_param_summaries()
             _add_variable_summaries()
+            _add_tensor_summaries('tracked_tensors')
             if self.debug:
                 _add_image_summaries()
-                _add_debug_tensor_summaries()
+                _add_tensor_summaries('debug_tensors')
 
         if len(self.devices) == 1:
             loss_ = self.loss_fn(batch, self.params, self.normalization)

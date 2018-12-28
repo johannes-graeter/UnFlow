@@ -212,7 +212,7 @@ def get_image_coordinates_as_points(shape):
     v = tf.expand_dims(v, axis=3)
 
     uv1 = tf.stack((u, v, tf.ones_like(u)), axis=3)
-    uv1_vec = tf.reshape(uv1, (shape[0], shape[1]*shape[2], 3))
+    uv1_vec = tf.reshape(uv1, (shape[0], shape[1] * shape[2], 3))
 
     return uv1_vec
 
@@ -281,9 +281,9 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
     if mask_inlier_prob is not None:
         # Do weighting with mask.
         # Get weights as vector with shape (batch_size, height*width)
-        assert(len(mask_inlier_prob.shape.as_list())==3)
-        assert(mask_inlier_prob.shape.as_list()[1]==flow_h and mask_inlier_prob.shape.as_list()[2]==flow_w)
-        weights = tf.reshape(mask_inlier_prob, (-1, flow_h*flow_w))
+        assert (len(mask_inlier_prob.shape.as_list()) == 3)
+        assert (mask_inlier_prob.shape.as_list()[1] == flow_h and mask_inlier_prob.shape.as_list()[2] == flow_w)
+        weights = tf.reshape(mask_inlier_prob, (-1, flow_h * flow_w))
         error_vec = tf.multiply(error_vec, weights)
 
     if debug:
@@ -339,3 +339,7 @@ def resize_bilinear(tensor, like):
 def add_to_debug_output(name, tensor):
     name = 'debug/' + name
     tf.add_to_collection('debug_tensors', tf.identity(tensor, name=name))
+
+
+def add_to_output(name, tensor):
+    tf.add_to_collection('tracked_tensors', tf.identity(tensor, name=name))
