@@ -10,8 +10,7 @@ class CityscapesData(Data):
         super().__init__(data_dir, stat_log_dir,
                          development=development,
                          fast_dir=fast_dir,
-                         do_fetch=False
-                         )
+                         do_fetch=False)
         self.sub_dir = sub_dir
 
     def _fetch_if_missing(self):

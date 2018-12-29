@@ -40,8 +40,7 @@ class Input:
     stddev = 1 / 0.0039216
 
     def __init__(self, data, batch_size, dims, *,
-                 num_threads=1, normalize=True
-                 ):
+                 num_threads=1, normalize=True):
         assert len(dims) == 2
         self.data = data
         self.dims = dims
@@ -50,10 +49,11 @@ class Input:
         self.normalize = normalize
 
     def _frame_name_to_num(self, name):
-        raise NotImplementedError("conversion from filename to frame to implemented.")
+        raise NotImplementedError("conversion from filename to frame not implemented.")
 
     def _resize_crop_or_pad(self, tensor, calib=None):
         height, width = self.dims
+        assert (len(tf.shape(tensor)) == 3)
 
         if calib is not None:
             orig_shape = tf.shape(tensor)
