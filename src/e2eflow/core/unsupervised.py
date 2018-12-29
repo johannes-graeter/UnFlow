@@ -52,7 +52,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     im2_photo = im2_photo - channel_mean
 
     flownet_spec = params.get('flownet', 'S')
-    full_resolution = params.get('full_res')
+    full_resolution = params.get('full_res', False)
     assert (full_resolution is False)
     train_all = params.get('train_all')
 

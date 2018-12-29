@@ -53,7 +53,7 @@ class Input:
 
     def _resize_crop_or_pad(self, tensor, calib=None):
         height, width = self.dims
-        assert (len(tf.shape(tensor)) == 3)
+        assert len(tensor.shape.as_list()) == 3
 
         if calib is not None:
             orig_shape = tf.shape(tensor)
