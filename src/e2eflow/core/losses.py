@@ -373,13 +373,6 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
     """
     Loss for funnet. Calculates normalized epipolar error and weights it by inlier_probability.
     """
-    # Weight loss in function of flow amplitude.
-    # For small flow, fundamental error is always small (norm(F) goes to zero for translation going to zero)
-    # Calculate squared norm of flow
-    # flow2 = tf.multiply(flow, flow)
-    # weight = tf.reduce_mean(tf.reduce_sum(flow2, axis=2))
-    weight = 1.
-
     # Several flow layers are outputted at different resolution.
     # First two are always du and dv at highest res.
     # Epipolar error of flow
@@ -388,9 +381,13 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
     # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
     loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, tf.squeeze(inlier_prob, axis=3)
                                                 , normalize=True, debug=True))
+    
+    # Potentiate the epiepolar error to make mask better learnable.
+    power = 3.0
+    loss = tf.pow(loss, power)
 
     # Add loss
-    tf.losses.add_loss(tf.scalar_mul(weight, loss))
+    tf.losses.add_loss(loss)
 
     # Return the 'total' loss: loss fns + regularization terms defined in the model
     return tf.losses.get_total_loss()

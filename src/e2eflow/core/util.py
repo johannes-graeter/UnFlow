@@ -219,7 +219,7 @@ def get_image_coordinates_as_points(shape):
 
 def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, *, normalize=True, debug=False):
     """
-    return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
+    return: a tensor with shape (num_batchs, height*width) with the squared epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
     input:
     - Prediction of fundamental matrix in form (f_11,f_12,f_13,f_21,f_22,f_23,f_31,f_32,f_33)
@@ -275,7 +275,7 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
         norm_fact = Fx2[:, 0, :] + Fx2[:, 1, :] + Ftxp2[:, 0, :] + Ftxp2[:, 1, :]  # shape (bs, num_pixels)
 
         # don't divide by zero
-        norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e10)
+        norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e30)
         error_vec = tf.divide(error_vec, norm_fact)
 
     if mask_inlier_prob is not None:
