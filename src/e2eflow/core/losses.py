@@ -382,11 +382,6 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
     loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, tf.squeeze(inlier_prob, axis=3)
                                                 , normalize=True, debug=True))
     
-    # Potentiate the epiepolar error to make mask better learnable.
-    power = 2.
-    loss = tf.pow(loss, power)
-    loss = tf.scalar_mul(0.0001, loss)
-
     # Add loss
     tf.losses.add_loss(loss)
 
