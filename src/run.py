@@ -47,6 +47,8 @@ def main(argv=None):
                               development=run_config['development'], do_fetch=False)
     einput = KITTIInput(data=edata, batch_size=1, normalize=False)
 
+    print('Read training data from {}'.format(dirs['data_training']))
+
     if 'kitti' in train_dataset:
         if train_dataset == 'kitti_raw':
             data = KITTIDataRaw(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
