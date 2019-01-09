@@ -10,7 +10,7 @@ from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp
 from .util import add_to_debug_output, add_to_output, get_reference_explain_mask, get_inlier_prob_from_mask_logits
 
 # REGISTER ALL POSSIBLE LOSS TERMS
-LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd', 'epipolar_loss']
+LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
 
 
 def _track_loss(op, name):
@@ -174,11 +174,11 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         regularization_loss = tf.losses.get_regularization_loss()
     _track_loss(regularization_loss, 'loss/reg_nets')
     _track_loss(combined_loss, 'loss/variable_loss')
-    combined_losses['epipolar_loss'] = params.get('epipolar_loss_weight') * fun_loss
+    _track_loss(params.get('epipolar_loss_weight') * fun_loss, 'loss/fun')
 
     # Add regularization loss of masks.
     for n, r in enumerate(reg_losses_exp_mask):
-        regularization_loss += r
+        regularization_loss += tf.scalar_mul(1.5, r)
         _track_loss(r, 'loss/reg_mask_{}'.format(n+1))
 
     final_loss = combined_loss + regularization_loss
