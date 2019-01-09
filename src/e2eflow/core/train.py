@@ -64,17 +64,16 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
 
     for i, finetune_ckpt in enumerate(restore_external_nets):
         print('-- restore', net_names[i], finetune_ckpt.model_checkpoint_path)
+
+        nets_to_restore = [net_names[i]]
+        variables_to_restore = slim.get_variables_to_restore(
+            include=nets_to_restore)
+
         try:
-            nets_to_restore = [net_names[i]]
-            variables_to_restore = slim.get_variables_to_restore(
-                include=nets_to_restore)
             restorer = tf.train.Saver(variables_to_restore)
             restorer.restore(sess, finetune_ckpt.model_checkpoint_path)
         except:
             # load partial network (missing final 2 upconvolutions)
-            nets_to_restore = [net_names[i]]
-            variables_to_restore = slim.get_variables_to_restore(
-                include=nets_to_restore)
             variables_to_restore = [v for v in variables_to_restore
                                     if not 'full_res' in v.name]
             restorer = tf.train.Saver(variables_to_restore)
