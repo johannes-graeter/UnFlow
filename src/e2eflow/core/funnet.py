@@ -19,6 +19,10 @@ def funnet(flow):
         # Mask layers
         masks, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
         end_points.update(end_points_mask)
+        
+        # Normalize masks
+       	masks = [m-tf.reduce_min(m) for m in masks]
+       	masks = [tf.div_no_nan(m, tf.reduce_max(m)) for m in masks]
 
         # Backend
         net = conv_activations[-1]
