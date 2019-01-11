@@ -112,7 +112,7 @@ class KITTIDataRaw(Data):
     def get_raw_dirs(self):
         dirs = []
         for extract_path in self._get_paths()[0]:
-            image_folder = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            image_folder = [os.path.join(extract_path, n, "/") for n in self.image_subdirs]
             dirs.extend(image_folder)
         return dirs
 

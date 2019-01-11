@@ -174,7 +174,7 @@ class Input:
 
         filenames = []
         for dir_path in data_dirs:
-            files = glob.glob(dir_path.rstrip("/") + "/*.png")  # That also support cityscapes.
+            files = glob.glob(dir_path + "*.png")  # That also support cityscapes.
             files.sort()
             if sequence:
                 steps = [1 + s for s in skip]
