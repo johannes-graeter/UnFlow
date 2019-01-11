@@ -82,7 +82,7 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
     # Restore currently training net always last, so that restored values maybe overriden.
     if ckpt is not None:
         # continue training
-        print('-- training ', ckpt.model_checkpoint_path)
+        print('-- restore and train ', ckpt.model_checkpoint_path)
         saver.restore(sess, ckpt.model_checkpoint_path)
         saver.recover_last_checkpoints(ckpt.all_model_checkpoint_paths)
     return saver
