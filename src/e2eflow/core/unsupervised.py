@@ -151,7 +151,10 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     assert (inlier_probs.shape.as_list()[1] == flows_fw[0].shape.as_list()[1])
     assert (inlier_probs.shape.as_list()[2] == flows_fw[0].shape.as_list()[2])
 
-    # intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
+    # Normalize probabilities
+    inlier_probs = inlier_probs-tf.reduce_min(inlier_probs)
+    inlier_probs = tf.div_no_nan(inlier_probs, tf.reduce_max(inlier_probs))
+
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw. 
     # Perhaps use loss directly on non-upsampled image?
     inlier_probs_full_res = tf.image.resize_bilinear(inlier_probs, im_shape)
