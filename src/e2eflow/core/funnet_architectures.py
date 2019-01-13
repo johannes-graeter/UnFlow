@@ -118,12 +118,13 @@ def _resize_like(inputs, ref):
                                         align_corners=True)
 
 
-def exp_mask_layers(conv_activations, mask_channels, scope='exp'):
+def exp_mask_layers(conv_activations, flow, mask_channels, scope='exp'):
     """Learn a wighting mask for outliers.
     This is an idea from Lowe's paper and the same architecture, only with stride 1 in upcnv5.
     icnv Layers are inspired by simple_decoder (for disp_net) from struct2depth
 
     :param conv_activations; output of frontend (before semantic motin estimation layers), skip_connections and bottleneck
+    :param flow; input flow from frontend for skip connection (last exp layer)
     :param mask_channels; number of channels for input of frontend (in case of forward flow=2)
     :param scope; scope name for layers
 
@@ -174,8 +175,8 @@ def exp_mask_layers(conv_activations, mask_channels, scope='exp'):
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask2, "mask2")
 
-            # That last stage is a bit strange but copied from disp_net
-            icnv1 = decoder_unit(icnv2, 16, [7, 7], stride=2, scope='upcnv1', skip_connection=mask2)
+            # skip flow to this layer.
+            icnv1 = decoder_unit(icnv2, 16, [7, 7], stride=2, scope='upcnv1', skip_connection=flow)
             mask1 = slim.conv2d(icnv1, mask_channels, [7, 7], stride=1, scope='mask1',
                                 normalizer_fn=None, activation_fn=None)
             _track_mask(mask1, "mask1")

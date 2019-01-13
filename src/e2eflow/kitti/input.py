@@ -7,6 +7,13 @@ from ..core.augment import random_crop
 from ..core.input import read_png_image, Input
 
 
+def frame_name_to_num_kitti(name):
+    stripped = name.split("/")[-1].split('.')[0].lstrip('0')
+    if stripped == '':
+        return 0
+    return int(stripped)
+
+
 def _read_flow(filenames, num_epochs=None):
     """Given a list of filenames, constructs a reader op for ground truth."""
     filename_queue = tf.train.string_input_producer(filenames,
@@ -47,9 +54,9 @@ def convert_to_number(strings, mask):
 
 class KITTIInput(Input):
     def __init__(self, data, batch_size, dims=(320, 1152), *,
-                 num_threads=1, normalize=True, skipped_frames=False):
+                 num_threads=1, normalize=True):
         super().__init__(data, batch_size, dims, num_threads=num_threads,
-                         normalize=normalize, skipped_frames=skipped_frames)
+                         normalize=normalize)
 
     def _decode_calib(self, string_tensor, key):
         "key is 02 or 03, need to calcualte intrinsics from roation and projection matrix."
@@ -61,6 +68,9 @@ class KITTIInput(Input):
 
         calib = proj[:3, :3]
         return calib
+
+    def _frame_name_to_num(self, name):
+        return frame_name_to_num_kitti(name)
 
     def _preprocess_flow(self, gt):
         flow, mask = gt

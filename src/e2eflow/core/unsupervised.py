@@ -1,13 +1,13 @@
 import tensorflow as tf
 
-from .augment import data_augmentation, random_photometric
+from .augment import random_photometric
 from .downsample import downsample
 from .flow_util import flow_to_color
 from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp_reg_loss
-from .util import add_to_debug_output, get_reference_explain_mask, get_inlier_prob_from_mask_logits
+from .util import add_to_debug_output, add_to_output, get_reference_explain_mask, get_inlier_prob_from_mask_logits
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -52,7 +52,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     im2_photo = im2_photo - channel_mean
 
     flownet_spec = params.get('flownet', 'S')
-    full_resolution = params.get('full_res')
+    full_resolution = params.get('full_res', False)
+    assert (full_resolution is False)
     train_all = params.get('train_all')
 
     flows_fw, flows_bw = flownet(im1_photo, im2_photo,
@@ -133,19 +134,27 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Get regularization for explanation mask.
     reg_losses_exp_mask = []
-    for mask_logits in masks_logits:
-        # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
-        ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
-        # Regularization loss must be done before converting to probability.
-        reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
-   # mask_logits=masks_logits[0]
-   # ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
-   # reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
+    # for mask_logits in masks_logits:
+    #     # If we want several motions, ref_exp_mask will be the exp mask from the motion before.
+    #     ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
+    #     # Regularization loss must be done before converting to probability.
+    #     reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
+
+    mask_logits = masks_logits[0]
+    ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
+    # Regularization loss must be done before converting to probability.
+    reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
 
     # Convert mask of logits to inlier probability.
     inlier_probs = tf.expand_dims(get_inlier_prob_from_mask_logits(masks_logits[0]), axis=3)
+    assert (inlier_probs.shape.as_list()[0] == flows_fw[0].shape.as_list()[0])
+    assert (inlier_probs.shape.as_list()[1] == flows_fw[0].shape.as_list()[1])
+    assert (inlier_probs.shape.as_list()[2] == flows_fw[0].shape.as_list()[2])
 
-    # intrin = tf.Print(intrin, ["intrinsics", intrin], summarize=100)
+    # Normalize probabilities
+    inlier_probs = inlier_probs-tf.reduce_min(inlier_probs)
+    inlier_probs = tf.div_no_nan(inlier_probs, tf.reduce_max(inlier_probs))
+
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw. 
     # Perhaps use loss directly on non-upsampled image?
     inlier_probs_full_res = tf.image.resize_bilinear(inlier_probs, im_shape)
@@ -153,7 +162,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Debug
     for i in range(5):
-        add_to_debug_output('funnet/motion_angles/{}'.format(i), motion_angles[:, i])
+        add_to_output('funnet/motion_angles/{}'.format(i), motion_angles[:, i])
     add_to_debug_output('funnet/final_flow', final_flow_fw)
     add_to_debug_output('funnet/input', flows_fw[0])
     add_to_debug_output('funnet/loss', fun_loss)
@@ -166,10 +175,14 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     else:
         combined_loss += params.get('epipolar_loss_weight') * fun_loss
         regularization_loss = tf.losses.get_regularization_loss()
+    _track_loss(regularization_loss, 'loss/reg_nets')
+    _track_loss(combined_loss, 'loss/variable_loss')
+    _track_loss(params.get('epipolar_loss_weight') * fun_loss, 'loss/fun')
 
     # Add regularization loss of masks.
-    for r in reg_losses_exp_mask:
-        regularization_loss += r
+    for n, r in enumerate(reg_losses_exp_mask):
+        regularization_loss += tf.scalar_mul(1.5, r)
+        _track_loss(r, 'loss/reg_mask_{}'.format(n+1))
 
     final_loss = combined_loss + regularization_loss
     _track_loss(final_loss, 'loss/combined')

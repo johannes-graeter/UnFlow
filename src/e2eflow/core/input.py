@@ -1,3 +1,4 @@
+import glob
 import os
 import random
 
@@ -34,30 +35,25 @@ def resize_output_flow(t, height, width, channels):
     return tf.reshape(tf.stack([u, v], axis=3), [batch, height, width, 2])
 
 
-def frame_name_to_num(name):
-    stripped = name.split('.')[0].lstrip('0')
-    if stripped == '':
-        return 0
-    return int(stripped)
-
-
 class Input:
     mean = [104.920005, 110.1753, 114.785955]
     stddev = 1 / 0.0039216
 
     def __init__(self, data, batch_size, dims, *,
-                 num_threads=1, normalize=True,
-                 skipped_frames=False):
+                 num_threads=1, normalize=True):
         assert len(dims) == 2
         self.data = data
         self.dims = dims
         self.batch_size = batch_size
         self.num_threads = num_threads
         self.normalize = normalize
-        self.skipped_frames = skipped_frames
+
+    def _frame_name_to_num(self, name):
+        raise NotImplementedError("conversion from filename to frame not implemented.")
 
     def _resize_crop_or_pad(self, tensor, calib=None):
         height, width = self.dims
+        assert len(tensor.shape.as_list()) == 3
 
         if calib is not None:
             orig_shape = tf.shape(tensor)
@@ -78,12 +74,6 @@ class Input:
 
     def _normalize_image(self, image):
         return (image - self.mean) / self.stddev
-
-    def _preprocess_image(self, image):
-        image, _ = self._resize_image_fixed(image)
-        if self.normalize:
-            image = self._normalize_image(image)
-        return image
 
     def _input_images(self, image_dir, hold_out_inv=None):
         """Assumes that paired images are next to each other after ordering the
@@ -114,8 +104,15 @@ class Input:
 
         input_1 = read_png_image(filenames_1, 1)
         input_2 = read_png_image(filenames_2, 1)
-        image_1 = self._preprocess_image(input_1)
-        image_2 = self._preprocess_image(input_2)
+
+        def _preprocess_image(image):
+            image, _ = self._resize_image_fixed(image)
+            if self.normalize:
+                image = self._normalize_image(image)
+            return image
+
+        image_1 = _preprocess_image(input_1)
+        image_2 = _preprocess_image(input_2)
 
         image_1 = tf.print(image_1, [image_1.shape.as_list()])
         return tf.shape(input_1), image_1, image_2
@@ -147,6 +144,10 @@ class Input:
 
         return calib
 
+    def _preprocess_input(self, image, calib_tf=None):
+        """Standard prerocessing does nothing. If you need to prescale overwrite that."""
+        return image, calib_tf
+
     def input_raw(self, swap_images=True, sequence=True,
                   augment_crop=True, shift=0, seed=0,
                   center_crop=False, skip=0):
@@ -169,12 +170,11 @@ class Input:
 
         data_dirs = self.data.get_raw_dirs()
         intrinsic_dirs = self.data.get_intrinsic_dirs()
-        height, width = self.dims
+        out_h, out_w = self.dims
 
         filenames = []
         for dir_path in data_dirs:
-
-            files = os.listdir(dir_path)
+            files = glob.glob(dir_path + "*.png")  # That also support cityscapes.
             files.sort()
             if sequence:
                 steps = [1 + s for s in skip]
@@ -185,14 +185,14 @@ class Input:
                 assert len(files) % 2 == 0
             for step, stop in zip(steps, stops):
                 for i in range(0, stop, step):
-                    if self.skipped_frames and sequence:
+                    if sequence:
                         assert step == 1
-                        num_first = frame_name_to_num(files[i])
-                        num_second = frame_name_to_num(files[i + 1])
+                        num_first = self._frame_name_to_num(files[i])
+                        num_second = self._frame_name_to_num(files[i + 1])
                         if num_first + 1 != num_second:
                             continue
-                    fn1 = os.path.join(dir_path, files[i])
-                    fn2 = os.path.join(dir_path, files[i + 1])
+                    fn1 = files[i]
+                    fn2 = files[i + 1]
                     calib_dir, key = intrinsic_dirs[dir_path]
                     filenames.append((fn1, fn2, calib_dir, key))
 
@@ -224,21 +224,25 @@ class Input:
             image_2 = read_png_image(filenames_2)
             calib_tf = self.read_calib(calib_filenames, keys)
 
+            image_1, calib_tf = self._preprocess_input(image_1, calib_tf)
+            image_2, _ = self._preprocess_input(image_2)
+
             shape_before_preproc = tf.shape(image_1)
 
             if augment_crop:
-                out_height, out_width = self.dims
-                #img_h, img_w, ch = image_1.shape.as_list()
-                #if (out_height > img_h) or (out_width > img_w):
-                    #raise Exception("No crop for augmentation possible, input image too small.")
-                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_height,
-                                                               out_w=out_width)
+                # img_h, img_w, ch = image_1.shape.as_list()
+                # if (out_height > img_h) or (out_width > img_w):
+                # raise Exception("No crop for augmentation possible, input image too small.")
+                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_h,
+                                                               out_w=out_w)
             elif center_crop:
                 image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
                 image_2, _ = self._resize_crop_or_pad(image_2)
-            else:
-                image_1 = tf.reshape(image_1, [height, width, 3])
-                image_2 = tf.reshape(image_2, [height, width, 3])
+
+            # Reshape for fixing the size if that hasn't been done already.
+            if image_1.shape.as_list()[0] is None:
+                image_1 = tf.reshape(image_1, [out_h, out_w, 3])
+                image_2 = tf.reshape(image_2, [out_h, out_w, 3])
 
             if self.normalize:
                 image_1 = self._normalize_image(image_1)

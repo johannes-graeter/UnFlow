@@ -64,17 +64,16 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
 
     for i, finetune_ckpt in enumerate(restore_external_nets):
         print('-- restore', net_names[i], finetune_ckpt.model_checkpoint_path)
+
+        nets_to_restore = [net_names[i]]
+        variables_to_restore = slim.get_variables_to_restore(
+            include=nets_to_restore)
+
         try:
-            nets_to_restore = [net_names[i]]
-            variables_to_restore = slim.get_variables_to_restore(
-                include=nets_to_restore)
             restorer = tf.train.Saver(variables_to_restore)
             restorer.restore(sess, finetune_ckpt.model_checkpoint_path)
         except:
             # load partial network (missing final 2 upconvolutions)
-            nets_to_restore = [net_names[i]]
-            variables_to_restore = slim.get_variables_to_restore(
-                include=nets_to_restore)
             variables_to_restore = [v for v in variables_to_restore
                                     if not 'full_res' in v.name]
             restorer = tf.train.Saver(variables_to_restore)
@@ -83,7 +82,7 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
     # Restore currently training net always last, so that restored values maybe overriden.
     if ckpt is not None:
         # continue training
-        print('-- training ', ckpt.model_checkpoint_path)
+        print('-- restore and train ', ckpt.model_checkpoint_path)
         saver.restore(sess, ckpt.model_checkpoint_path)
         saver.recover_last_checkpoints(ckpt.all_model_checkpoint_paths)
     return saver
@@ -108,7 +107,7 @@ def _add_variable_summaries():
             tensor_names = "motion_angles/batch{}/motion{}".format(i, j)
             tf.summary.scalar(tensor_names, ms[0][i, j])
 
-    # train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            # train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
 
 def _add_param_summaries():
@@ -125,8 +124,8 @@ def _add_image_summaries():
         tf.summary.image(tensor_name, im)
 
 
-def _add_debug_tensor_summaries():
-    ts = tf.get_collection('debug_tensors')
+def _add_tensor_summaries(collection='debug_tensors'):
+    ts = tf.get_collection(collection)
     for t in ts:
         name = re.sub('tower_[0-9]*/', '', t.op.name)
         tf.summary.scalar(name + '/mean', tf.reduce_mean(t))
@@ -186,7 +185,7 @@ class Trainer:
         # assert (max_iter - start_iter + 1) % save_interval == 0
         for i in range(start_iter, max_iter + 1, save_interval):
             self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            #self.eval(1)
+            # self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
@@ -202,9 +201,10 @@ class Trainer:
             _add_loss_summaries()
             _add_param_summaries()
             _add_variable_summaries()
+            _add_tensor_summaries('tracked_tensors')
             if self.debug:
                 _add_image_summaries()
-                _add_debug_tensor_summaries()
+                _add_tensor_summaries('debug_tensors')
 
         if len(self.devices) == 1:
             loss_ = self.loss_fn(batch, self.params, self.normalization)

@@ -212,14 +212,14 @@ def get_image_coordinates_as_points(shape):
     v = tf.expand_dims(v, axis=3)
 
     uv1 = tf.stack((u, v, tf.ones_like(u)), axis=3)
-    uv1_vec = tf.reshape(uv1, (shape[0], shape[1]*shape[2], 3))
+    uv1_vec = tf.reshape(uv1, (shape[0], shape[1] * shape[2], 3))
 
     return uv1_vec
 
 
 def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, *, normalize=True, debug=False):
     """
-    return: a tensor with shape (num_batchs, height*width) with the epipolar errors of the flow given the
+    return: a tensor with shape (num_batchs, height*width) with the squared epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
     input:
     - Prediction of fundamental matrix in form (f_11,f_12,f_13,f_21,f_22,f_23,f_31,f_32,f_33)
@@ -275,15 +275,15 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
         norm_fact = Fx2[:, 0, :] + Fx2[:, 1, :] + Ftxp2[:, 0, :] + Ftxp2[:, 1, :]  # shape (bs, num_pixels)
 
         # don't divide by zero
-        norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e10)
+        norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e30)
         error_vec = tf.divide(error_vec, norm_fact)
 
     if mask_inlier_prob is not None:
         # Do weighting with mask.
         # Get weights as vector with shape (batch_size, height*width)
-        assert(len(mask_inlier_prob.shape.as_list())==3)
-        assert(mask_inlier_prob.shape.as_list()[1]==flow_h and mask_inlier_prob.shape.as_list()[2]==flow_w)
-        weights = tf.reshape(mask_inlier_prob, (-1, flow_h*flow_w))
+        assert (len(mask_inlier_prob.shape.as_list()) == 3)
+        assert (mask_inlier_prob.shape.as_list()[1] == flow_h and mask_inlier_prob.shape.as_list()[2] == flow_w)
+        weights = tf.reshape(mask_inlier_prob, (-1, flow_h * flow_w))
         error_vec = tf.multiply(error_vec, weights)
 
     if debug:
@@ -339,3 +339,7 @@ def resize_bilinear(tensor, like):
 def add_to_debug_output(name, tensor):
     name = 'debug/' + name
     tf.add_to_collection('debug_tensors', tf.identity(tensor, name=name))
+
+
+def add_to_output(name, tensor):
+    tf.add_to_collection('tracked_tensors', tf.identity(tensor, name=name))

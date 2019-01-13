@@ -2,8 +2,8 @@ import os
 
 from . import raw_records
 from ..core.data import Data
-from ..core.input import frame_name_to_num
 from ..util import tryremove
+from .input import frame_name_to_num_kitti
 
 
 def exclude_test_and_train_images(kitti_dir, exclude_lists_dir, exclude_target_dir,
@@ -23,7 +23,7 @@ def exclude_test_and_train_images(kitti_dir, exclude_lists_dir, exclude_target_d
         except:
             pass
         seq_files = sorted(os.listdir(seq_dir_abs))
-        image_num = frame_name_to_num(image)
+        image_num = frame_name_to_num_kitti(image)
         try:
             image_index = seq_files.index(image)
         except ValueError:
@@ -35,7 +35,7 @@ def exclude_test_and_train_images(kitti_dir, exclude_lists_dir, exclude_target_d
         stop_num = image_num + distance + 2
         for i in range(start, stop):
             filename = seq_files[i]
-            num = frame_name_to_num(filename)
+            num = frame_name_to_num_kitti(filename)
             if num < start_num or num >= stop_num:
                 continue
             to_move.append((os.path.join(seq_dir_abs, filename),
@@ -112,7 +112,7 @@ class KITTIDataRaw(Data):
     def get_raw_dirs(self):
         dirs = []
         for extract_path in self._get_paths()[0]:
-            image_folder = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            image_folder = [os.path.join(extract_path, n, "/") for n in self.image_subdirs]
             dirs.extend(image_folder)
         return dirs
 
