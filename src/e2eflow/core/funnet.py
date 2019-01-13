@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .funnet_architectures import custom_frontend, exp_mask_layers, trunc_normal
+from .funnet_architectures import custom_frontend, custom_frontend_resnet, exp_mask_layers, trunc_normal
 
 slim = tf.contrib.slim
 
@@ -9,7 +9,7 @@ def funnet(flow):
     def frontend(input_flow, scope):
         """Define frontend to use."""
         # return alexnet_v2(input_flow, num_classes=None, spatial_squeeze=False, scope=scope)
-        return custom_frontend(input_flow, scope=scope)
+        return custom_frontend_resnet(input_flow, scope=scope)
 
     with tf.variable_scope('funnet') as sc:
         # Frontend
