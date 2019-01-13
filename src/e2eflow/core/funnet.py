@@ -17,7 +17,7 @@ def funnet(flow):
         conv_activations, end_points = frontend(flow, scope=sc.original_name_scope)
 
         # Mask layers
-        masks, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
+        mask, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
         end_points.update(end_points_mask)
 
         # Backend
@@ -49,4 +49,4 @@ def funnet(flow):
             pi = 3.14159265358979323846
             motion_angles = tf.scalar_mul(pi / 2., motion_angles)
 
-            return motion_angles, masks
+            return motion_angles, mask

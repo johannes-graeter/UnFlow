@@ -17,8 +17,8 @@ def _track_loss(op, name):
     tf.add_to_collection('losses', tf.identity(op, name=name))
 
 
-def _track_image(op, name):
-    name = 'train/' + name
+def _track_image(op, name, namespace="train"):
+    name = namespace + '/' + name
     tf.add_to_collection('train_images', tf.identity(op, name=name))
 
 
@@ -130,7 +130,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
             mask_s = downsample(mask_s, 2)
 
     # Add loss from epipolar geometry
-    motion_angles, masks_logits = funnet(flows_fw[0])
+    motion_angles, mask_logits = funnet(flows_fw[0])
 
     # Get regularization for explanation mask.
     reg_losses_exp_mask = []
@@ -140,19 +140,18 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     #     # Regularization loss must be done before converting to probability.
     #     reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
 
-    mask_logits = masks_logits[0]
     ref_exp_mask = get_reference_explain_mask(mask_logits.shape.as_list())
     # Regularization loss must be done before converting to probability.
     reg_losses_exp_mask.append(compute_exp_reg_loss(mask_logits, ref_exp_mask))
 
     # Convert mask of logits to inlier probability.
-    inlier_probs = tf.expand_dims(get_inlier_prob_from_mask_logits(masks_logits[0]), axis=3)
+    inlier_probs = tf.expand_dims(get_inlier_prob_from_mask_logits(mask_logits), axis=3)
     assert (inlier_probs.shape.as_list()[0] == flows_fw[0].shape.as_list()[0])
     assert (inlier_probs.shape.as_list()[1] == flows_fw[0].shape.as_list()[1])
     assert (inlier_probs.shape.as_list()[2] == flows_fw[0].shape.as_list()[2])
 
     # Normalize probabilities
-    inlier_probs = inlier_probs-tf.reduce_min(inlier_probs)
+    inlier_probs = inlier_probs - tf.reduce_min(inlier_probs)
     inlier_probs = tf.div_no_nan(inlier_probs, tf.reduce_max(inlier_probs))
 
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw. 
@@ -166,8 +165,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     add_to_debug_output('funnet/final_flow', final_flow_fw)
     add_to_debug_output('funnet/input', flows_fw[0])
     add_to_debug_output('funnet/loss', fun_loss)
-    _track_image(inlier_probs_full_res, 'funnet/mask_full')
-    _track_image(inlier_probs, 'funnet/mask')
+    _track_image(inlier_probs_full_res, 'mask_full', namespace='funnet')
+    _track_image(inlier_probs, 'mask', namespace='funnet')
 
     if params.get('train_motion_only'):
         combined_loss = params.get('epipolar_loss_weight') * fun_loss
@@ -181,8 +180,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Add regularization loss of masks.
     for n, r in enumerate(reg_losses_exp_mask):
-        regularization_loss += tf.scalar_mul(1.5, r)
-        _track_loss(r, 'loss/reg_mask_{}'.format(n+1))
+        regularization_loss += tf.scalar_mul(1.1, r)
+        _track_loss(r, 'loss/reg_mask_{}'.format(n + 1))
 
     final_loss = combined_loss + regularization_loss
     _track_loss(final_loss, 'loss/combined')
