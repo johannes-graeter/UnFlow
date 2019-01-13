@@ -1,6 +1,7 @@
 import tensorflow as tf
 
-from .resnet_v2 import resnet_v2, resnet_v2_block
+from .resnet_utils import _residual_block_encode, _residual_block
+
 # Debug
 from .util import get_inlier_prob_from_mask_logits
 
@@ -42,23 +43,23 @@ def custom_frontend_resnet(inputs, is_training=True, scope='custom_frontend'):
             end_points_collection = sc.original_name_scope  # + '_end_points'
 
             def custom_resnet(inputs):
-                """ResNet-50 model of [1]. See resnet_v2() for arg and return description."""
-                blocks = [
-                    resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
-                    resnet_v2_block('block2', base_depth=128, num_units=3, stride=2),
-                    resnet_v2_block('block3', base_depth=256, num_units=2, stride=1),
-                ]
-                return resnet_v2(inputs, blocks, num_classes=None, is_training=is_training,
-                                 global_pool=False, output_stride=None,
-                                 include_root_block=False, spatial_squeeze=True,
-                                 reuse=None, scope=scope)
+                cnv1 = _residual_block_encode(inputs, out_channel=64, strides=2, is_training=is_training)
+                cnv1 = _residual_block(cnv1, is_training=is_training)
+
+                cnv2 = _residual_block_encode(cnv1, out_channel=128, strides=2, is_training=is_training)
+                cnv2 = _residual_block(cnv2, is_training=is_training)
+
+                cnv3 = _residual_block_encode(cnv2, out_channel=256, strides=1, is_training=is_training)
+                cnv3 = _residual_block(cnv3, is_training=is_training)
+
+                return cnv3, cnv2, cnv1
 
             # Collect outputs for conv2d, fully_connected and max_pool2d.
             with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
                 # Two strided convolutions (usually resnet 18 uses pooling, we don't want that)
                 cnv1 = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
                 cnv2 = slim.conv2d(cnv1, 32, [5, 5], stride=2, scope='cnv2')
-                cnv5, [cnv4, cnv3] = custom_resnet(cnv2)
+                cnv5, cnv4, cnv3 = custom_resnet(cnv2)
 
                 print(cnv5, cnv4, cnv3)
 
