@@ -43,14 +43,14 @@ def custom_frontend_resnet(inputs, is_training=True, scope='custom_frontend'):
             end_points_collection = sc.original_name_scope  # + '_end_points'
 
             def custom_resnet(inputs):
-                cnv1 = _residual_block_encode(inputs, out_channel=64, strides=2, is_training=is_training)
-                cnv1 = _residual_block(cnv1, is_training=is_training)
+                cnv1 = _residual_block_encode(inputs, out_channel=64, strides=2, is_training=is_training, name='res1_1')
+                cnv1 = _residual_block(cnv1, is_training=is_training, name='res1_2')
 
-                cnv2 = _residual_block_encode(cnv1, out_channel=128, strides=2, is_training=is_training)
-                cnv2 = _residual_block(cnv2, is_training=is_training)
+                cnv2 = _residual_block_encode(cnv1, out_channel=128, strides=2, is_training=is_training, name='res2_1')
+                cnv2 = _residual_block(cnv2, is_training=is_training, name='res2_2')
 
-                cnv3 = _residual_block_encode(cnv2, out_channel=256, strides=1, is_training=is_training)
-                cnv3 = _residual_block(cnv3, is_training=is_training)
+                cnv3 = _residual_block_encode(cnv2, out_channel=256, strides=1, is_training=is_training, name='res3_1')
+                cnv3 = _residual_block(cnv3, is_training=is_training, name='res3_2')
 
                 return cnv3, cnv2, cnv1
 
