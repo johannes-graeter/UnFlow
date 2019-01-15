@@ -138,14 +138,14 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     inlier_probs_full_res = tf.image.resize_bilinear(inlier_probs, im_shape)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs_full_res, intrin)
 
-    # Add loss from epipolar geometry for backward pass (more training data)
-    motion_angles_bw, mask_logits_bw = funnet(flows_bw[0])  # uses auto_reuse
-    # Convert mask of logits to inlier probability.
-    inlier_probs_bw = get_inlier_prob_from_mask_logits(mask_logits_bw)
-
-    # Upscale for flow weighting. Same method as for upscaling final_flow_fw.
-    inlier_probs_bw_full_res = tf.image.resize_bilinear(inlier_probs_bw, im_shape)
-    fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
+    # # Add loss from epipolar geometry for backward pass (more training data)
+    # motion_angles_bw, mask_logits_bw = funnet(flows_bw[0])  # uses auto_reuse
+    # # Convert mask of logits to inlier probability.
+    # inlier_probs_bw = get_inlier_prob_from_mask_logits(mask_logits_bw)
+    #
+    # # Upscale for flow weighting. Same method as for upscaling final_flow_fw.
+    # inlier_probs_bw_full_res = tf.image.resize_bilinear(inlier_probs_bw, im_shape)
+    # fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
     # Regularize to pull all inlier probs towards 1 (only forward pass should be enough)
     reg_loss_exp_mask = tf.reduce_mean(1. - inlier_probs)
@@ -156,20 +156,20 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     add_to_debug_output('funnet/final_flow', final_flow_fw)
     add_to_debug_output('funnet/input', flows_fw[0])
     add_to_debug_output('funnet/loss', fun_loss)
-    add_to_debug_output('funnet/loss_bw', fun_loss_bw)
     _track_image(inlier_probs_full_res, 'mask_full', namespace='funnet')
     _track_image(inlier_probs, 'mask', namespace='funnet')
-    _track_image(inlier_probs_bw_full_res, 'mask_full_bw', namespace='funnet')
-    _track_image(inlier_probs_bw, 'mask_bw', namespace='funnet')
+    # add_to_debug_output('funnet/loss_bw', fun_loss_bw)
+    # _track_image(inlier_probs_bw_full_res, 'mask_full_bw', namespace='funnet')
+    # _track_image(inlier_probs_bw, 'mask_bw', namespace='funnet')
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
         combined_loss = params.get('epipolar_loss_weight') * fun_loss
-        combined_loss += params.get('epipolar_loss_weight') * fun_loss_bw
+        # combined_loss += params.get('epipolar_loss_weight') * fun_loss_bw
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
     else:
         combined_loss += params.get('epipolar_loss_weight') * fun_loss
-        combined_loss += params.get('epipolar_loss_weight') * fun_loss_bw
+        # combined_loss += params.get('epipolar_loss_weight') * fun_loss_bw
         regularization_loss = tf.losses.get_regularization_loss()
     _track_loss(regularization_loss, 'loss/reg_nets')
     _track_loss(combined_loss, 'loss/variable_loss')

@@ -25,9 +25,9 @@ def funnet(flow):
         net = conv_activations[-1]
 
         with slim.arg_scope([slim.conv2d],
-                            biases_initializer=tf.constant_initializer(0.01),
-                            weights_regularizer=slim.l2_regularizer(0.05),
-                            weights_initializer=trunc_normal(0.1),
+                            # biases_initializer=tf.constant_initializer(0.01),
+                            # weights_regularizer=slim.l2_regularizer(0.05),
+                            # weights_initializer=trunc_normal(0.1),
                             outputs_collections="preproc",
                             activation_fn=tf.nn.relu):
             # Reduce information for fully connected.

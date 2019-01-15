@@ -106,13 +106,12 @@ def _add_variable_summaries():
             tensor_names = "motion_angles/batch{}/motion{}".format(i, j)
             tf.summary.scalar(tensor_names, ms[0][i, j])
 
-    batch_size, var_length = ms[1].shape.as_list()
-    for i in range(batch_size):
-        for j in range(var_length):
-            tensor_names = "motion_angles_bw/batch{}/motion{}".format(i, j)
-            tf.summary.scalar(tensor_names, ms[1][i, j])
-
-            # train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+    if len(ms) > 1:
+        batch_size, var_length = ms[1].shape.as_list()
+        for i in range(batch_size):
+            for j in range(var_length):
+                tensor_names = "motion_angles_bw/batch{}/motion{}".format(i, j)
+                tf.summary.scalar(tensor_names, ms[1][i, j])
 
 
 def _add_param_summaries():
