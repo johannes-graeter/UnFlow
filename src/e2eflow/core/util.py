@@ -294,23 +294,29 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
     return error_vec
 
 
-def get_reference_explain_mask(mask_shape, downscaling=0):
-    batch_size, height, width, _ = mask_shape
-    tmp = np.array([0, 1])
-    ref_exp_mask = np.tile(tmp,
-                           (batch_size,
-                            int(height / (2 ** downscaling)),
-                            int(width / (2 ** downscaling)),
-                            1))
-    ref_exp_mask = tf.constant(ref_exp_mask, dtype=tf.float32)
-    return ref_exp_mask
+# def get_reference_explain_mask(mask_shape, downscaling=0):
+#     batch_size, height, width, _ = mask_shape
+#     tmp = np.array([0, 1])
+#     ref_exp_mask = np.tile(tmp,
+#                            (batch_size,
+#                             int(height / (2 ** downscaling)),
+#                             int(width / (2 ** downscaling)),
+#                             1))
+#     ref_exp_mask = tf.constant(ref_exp_mask, dtype=tf.float32)
+#     return ref_exp_mask
 
 
-def get_inlier_prob_from_mask_logits(cur_exp_logits):
-    # cur_exp_logits = tf.slice(mask_logits, [0, 0, 0, 0], [-1, -1, -1, 2])  # For extracting current mask from several maks
-    # ref_exp_mask = get_reference_explain_mask(flow_fw[0].shape.as_list())
+def get_inlier_prob_from_mask_logits(cur_exp_logits, normalize=True):
     cur_exp = tf.nn.softmax(cur_exp_logits)
     inlier_probs = cur_exp[:, :, :, 1]  # inlier prob
+
+    inlier_probs = tf.expand_dims(inlier_probs, axis=3)
+
+    # Normalize probabilities from 1 to zero.
+    if normalize:
+        inlier_probs = inlier_probs - tf.reduce_min(inlier_probs)
+        inlier_probs = tf.div_no_nan(inlier_probs, tf.reduce_max(inlier_probs))
+
     return inlier_probs
 
 

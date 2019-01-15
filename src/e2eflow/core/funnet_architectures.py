@@ -46,7 +46,7 @@ def custom_frontend(inputs, scope='custom_frontend'):
                 return cnv1b
 
             # Collect outputs for conv2d, fully_connected and max_pool2d.
-            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
+            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection], activation_fn=tf.nn.relu):
                 # This is same as compression layer for lowe's net with stride 1 for last conv layer
                 # for larger width and height
                 cnv1 = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
@@ -124,32 +124,32 @@ def exp_mask_layers(conv_activations, flow, mask_channels, scope='exp'):
             icnv5 = decoder_unit(bottleneck, 128, [3, 3], stride=1, scope='upcnv5', skip_connection=cnv4)
 
             icnv4 = decoder_unit(icnv5, 64, [3, 3], stride=2, scope='upcnv4', skip_connection=cnv3)
-            mask4 = slim.conv2d(icnv4, mask_channels, [3, 3], stride=1, scope='mask4',
-                                normalizer_fn=None, activation_fn=None)
-            _track_mask(mask4, "mask4")
+            # mask4 = slim.conv2d(icnv4, mask_channels, [3, 3], stride=1, scope='mask4',
+            #                     normalizer_fn=None, activation_fn=None)
+            # _track_mask(mask4, "mask4")
 
             icnv3 = decoder_unit(icnv4, 32, [3, 3], stride=2, scope='upcnv3', skip_connection=cnv2)
-            mask3 = slim.conv2d(icnv3, mask_channels, [3, 3], stride=1, scope='mask3',
-                                normalizer_fn=None, activation_fn=None)
-            _track_mask(mask3, "mask3")
+            # mask3 = slim.conv2d(icnv3, mask_channels, [3, 3], stride=1, scope='mask3',
+            #                     normalizer_fn=None, activation_fn=None)
+            # _track_mask(mask3, "mask3")
 
             icnv2 = decoder_unit(icnv3, 16, [5, 5], stride=2, scope='upcnv2', skip_connection=cnv1)
-            mask2 = slim.conv2d(icnv2, mask_channels, [5, 5], stride=1, scope='mask2',
-                                normalizer_fn=None, activation_fn=None)
-            _track_mask(mask2, "mask2")
+            # mask2 = slim.conv2d(icnv2, mask_channels, [5, 5], stride=1, scope='mask2',
+            #                     normalizer_fn=None, activation_fn=None)
+            # _track_mask(mask2, "mask2")
 
             # skip flow to this layer.
             icnv1 = decoder_unit(icnv2, 16, [7, 7], stride=2, scope='upcnv1', skip_connection=flow)
             mask1 = slim.conv2d(icnv1, mask_channels, [7, 7], stride=1, scope='mask1',
                                 normalizer_fn=None, activation_fn=None)
-            _track_mask(mask1, "mask1")
+            # _track_mask(mask1, "mask1")
 
             print("-----------")
             for m in [icnv5, icnv4, icnv3, icnv2, icnv1]:
                 print(m.shape.as_list())
 
     end_points = slim.utils.convert_collection_to_dict(end_points_collection)
-    return [mask1, mask2, mask3, mask4], end_points
+    return mask1, end_points
 
 
 def alexnet_v2(inputs,
