@@ -196,7 +196,7 @@ class Input:
                     calib_dir, key = intrinsic_dirs[dir_path]
                     filenames.append((fn1, fn2, calib_dir, key))
 
-        if seed:
+        if seed is not None:
             random.seed(seed)
             random.shuffle(filenames)
         print("Input {} frame pairs.".format(len(filenames)))

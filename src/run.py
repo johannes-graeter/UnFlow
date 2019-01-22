@@ -85,7 +85,9 @@ def main(argv=None):
         lambda shift: input.input_raw(swap_images=False,
                                       augment_crop=False,
                                       center_crop=True,
-                                      shift=shift * run_config['batch_size']),
+                                      shift=shift * run_config['batch_size'],
+                                      seed=126324  # initialize with constant seed in order to redo training.
+                                      ),
         lambda: einput.input_raw(swap_images=False,
                                  augment_crop=False,
                                  center_crop=True),
