@@ -1,5 +1,5 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 
 def to_intrinsics(f, cu, cv):
@@ -294,16 +294,16 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
     return error_vec
 
 
-# def get_reference_explain_mask(mask_shape, downscaling=0):
-#     batch_size, height, width, _ = mask_shape
-#     tmp = np.array([0, 1])
-#     ref_exp_mask = np.tile(tmp,
-#                            (batch_size,
-#                             int(height / (2 ** downscaling)),
-#                             int(width / (2 ** downscaling)),
-#                             1))
-#     ref_exp_mask = tf.constant(ref_exp_mask, dtype=tf.float32)
-#     return ref_exp_mask
+def get_reference_explain_mask(mask_shape, downscaling=0):
+    batch_size, height, width, _ = mask_shape
+    tmp = np.array([0, 1])
+    ref_exp_mask = np.tile(tmp,
+                           (batch_size,
+                            int(height / (2 ** downscaling)),
+                            int(width / (2 ** downscaling)),
+                            1))
+    ref_exp_mask = tf.constant(ref_exp_mask, dtype=tf.float32)
+    return ref_exp_mask
 
 
 def get_inlier_prob_from_mask_logits(cur_exp_logits, normalize=True):
