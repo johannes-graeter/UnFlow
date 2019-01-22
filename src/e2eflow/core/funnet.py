@@ -45,6 +45,11 @@ def funnet(flow):
             bs, height, width, channels = net.shape.as_list()
             net = tf.reshape(net, (bs, height * width * channels))
 
+            # Sascha says dropout is awesome!
+            # Also do dropout in inference,
+            # You can calculate the epistemic error by foing forward inference a few times.
+            net = slim.dropout(net, 0.2, is_training=True, scope='dropout7')
+
             # Learn motion from feature map (net).
             # Should have reasonable height and width to preserve spatial information.
             motion_angles = slim.fully_connected(net, 5, activation_fn=tf.nn.tanh, scope="fc_final")
