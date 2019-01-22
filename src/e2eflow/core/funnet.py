@@ -25,11 +25,9 @@ def funnet(flow):
         net = conv_activations[-1]
 
         with slim.arg_scope([slim.conv2d],
-                            # biases_initializer=tf.constant_initializer(0.01),
-                            # weights_regularizer=slim.l2_regularizer(0.05),
-                            # weights_initializer=trunc_normal(0.1),
                             outputs_collections="preproc",
-                            activation_fn=tf.nn.relu):
+                            activation_fn=tf.nn.relu,
+                            weights_regularizer=slim.l2_regularizer(1e-5)):
             # Reduce information for fully connected.
             # Use conv2d instead of fully_connected layers.
             net = slim.conv2d(net, 1024, [1, 1], scope='fc7')
@@ -39,10 +37,10 @@ def funnet(flow):
             # end_points[sc.name + '/fc8'] = net
 
         with slim.arg_scope([slim.fully_connected],
+                            outputs_collections="motion_angles",
                             biases_initializer=tf.constant_initializer(0.001),
-                            weights_regularizer=slim.l2_regularizer(0.05),
                             weights_initializer=trunc_normal(0.1),
-                            outputs_collections="motion_angles"):
+                            weights_regularizer=slim.l2_regularizer(1e-5)):
             # Reshape for fully connected net.
             bs, height, width, channels = net.shape.as_list()
             net = tf.reshape(net, (bs, height * width * channels))

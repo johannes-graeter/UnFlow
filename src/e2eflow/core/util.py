@@ -217,7 +217,7 @@ def get_image_coordinates_as_points(shape):
     return uv1_vec
 
 
-def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, *, normalize=True, debug=False):
+def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=None, *, normalize=True, debug=False):
     """
     return: a tensor with shape (num_batchs, height*width) with the squared epipolar errors of the flow given the
     fundamental matrix prediction with shape (num_batches, 9, 1).
@@ -278,12 +278,12 @@ def epipolar_errors(predict_fundamental_matrix_in, flow, mask_inlier_prob=None, 
         norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e30)
         error_vec = tf.divide(error_vec, norm_fact)
 
-    if mask_inlier_prob is not None:
+    if mask_weights is not None:
         # Do weighting with mask.
         # Get weights as vector with shape (batch_size, height*width)
-        assert (len(mask_inlier_prob.shape.as_list()) == 3)
-        assert (mask_inlier_prob.shape.as_list()[1] == flow_h and mask_inlier_prob.shape.as_list()[2] == flow_w)
-        weights = tf.reshape(mask_inlier_prob, (-1, flow_h * flow_w))
+        assert (len(mask_weights.shape.as_list()) == 3)
+        assert (mask_weights.shape.as_list()[1] == flow_h and mask_weights.shape.as_list()[2] == flow_w)
+        weights = tf.reshape(mask_weights, (-1, flow_h * flow_w))
         error_vec = tf.multiply(error_vec, weights)
 
     if debug:
