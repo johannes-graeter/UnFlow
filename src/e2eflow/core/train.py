@@ -333,7 +333,7 @@ class Trainer:
                     except tf.errors.OutOfRangeError as exc:
                         print(exc)
                         print("error in iteration {}".format(i))
-                        coord.request_stop()
+                        # coord.request_stop()
 
                 save_path = os.path.join(self.ckpt_dir, 'model.ckpt')
                 print("save iteration {}".format(save_iter))
