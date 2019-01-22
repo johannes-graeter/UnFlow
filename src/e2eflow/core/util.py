@@ -306,7 +306,7 @@ def get_reference_explain_mask(mask_shape, downscaling=0):
     return ref_exp_mask
 
 
-def get_inlier_prob_from_mask_logits(cur_exp_logits, normalize=True):
+def get_inlier_prob_from_mask_logits(cur_exp_logits, normalize=False):
     cur_exp = tf.nn.softmax(cur_exp_logits)
     inlier_probs = cur_exp[:, :, :, 1]  # inlier prob
 

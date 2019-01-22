@@ -187,9 +187,14 @@ class Trainer:
         print('-- training from i = {} to {}'.format(start_iter, max_iter))
 
         # assert (max_iter - start_iter + 1) % save_interval == 0
-        for i in range(start_iter, max_iter + 1, save_interval):
-            self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            # self.eval(1)
+        # for i in range(start_iter, max_iter + 1, save_interval):
+        #     self.train(i, i + save_interval - 1, i - (min_iter + 1))
+        #     # self.eval(1)
+        i = start_iter
+        while i < max_iter:
+            current_iter = self.train(i, i + save_interval - 1, i - (min_iter + 1))
+            i = current_iter + 1
+            # # self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
@@ -331,6 +336,7 @@ class Trainer:
                         coord.request_stop()
 
                 save_path = os.path.join(self.ckpt_dir, 'model.ckpt')
+                print("save iteration {}".format(save_iter))
                 saver.save(sess, save_path, global_step=save_iter)
 
                 summary_writer.close()
@@ -343,6 +349,8 @@ class Trainer:
                     if any(t.is_alive() for t in threads):
                         raise Exception("Not all threads are dead...")
                     print("All threads are dead, continue!")
+
+                return save_iter
 
     def eval(self, num):
         assert num == 1  # TODO enable num > 1

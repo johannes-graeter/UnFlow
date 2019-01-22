@@ -34,18 +34,19 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Data & mask augmentation
     border_mask = create_border_mask(im1, 0.1)
 
-    _track_image(im1, 'orig1')
-    _track_image(im2, 'orig2')
+    # _track_image(im1, 'orig1')
+    # _track_image(im2, 'orig2')
 
     if augment_photometric:
         im1_photo, im2_photo = random_photometric([im1, im2],
                                                   noise_stddev=0.04, min_contrast=-0.3, max_contrast=0.3,
                                                   brightness_stddev=0.02, min_colour=0.9, max_colour=1.1,
                                                   min_gamma=0.7, max_gamma=1.5)
-        _track_image(im1_photo, 'augmented1')
-        _track_image(im2_photo, 'augmented2')
     else:
         im1_photo, im2_photo = im1, im2
+
+    _track_image(im1_photo, 'augmented1')
+    _track_image(im2_photo, 'augmented2')
 
     # Images for neural network input with mean-zero values in [-1, 1]
     im1_photo = im1_photo - channel_mean
@@ -133,6 +134,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     motion_angles, mask_logits = funnet(flows_fw[0])
     # Convert mask of logits to inlier probability.
     inlier_probs = get_inlier_prob_from_mask_logits(mask_logits)
+
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw.
     inlier_probs_full_res = tf.image.resize_bilinear(inlier_probs, im_shape)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs_full_res, intrin)
