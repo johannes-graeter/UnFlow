@@ -145,9 +145,13 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
     # Regularize to pull all inlier probs towards 1.
-    mask_regularization_loss = compute_exp_reg_loss(mask_logits)
-    mask_regularization_loss += compute_exp_reg_loss(mask_logits_bw)
-    mask_regularization_loss = tf.scalar_mul(1.0, mask_regularization_loss)
+    fw_mask_loss = compute_exp_reg_loss(mask_logits)
+
+    # Regularize backward inlier mask to be very similar to forward mask.
+    warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
+    bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
+
+    mask_regularization_loss = tf.scalar_mul(1.0, fw_mask_loss + bw_mask_loss)
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
@@ -181,6 +185,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Add regularization loss of mask to problem.
     _track_loss(mask_regularization_loss, 'loss/reg_mask')
+    _track_loss(fw_mask_loss, 'loss/reg_mask_fw')
+    _track_loss(bw_mask_loss, 'loss/reg_mask_bw')
 
     _track_loss(final_loss, 'loss/final')
 
