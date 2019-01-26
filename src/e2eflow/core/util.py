@@ -313,9 +313,9 @@ def get_inlier_prob_from_mask_logits(cur_exp_logits, normalize=False):
     inlier_probs = tf.expand_dims(inlier_probs, axis=3)
 
     # Normalize probabilities from 1 to zero.
-    if normalize:
-        inlier_probs = inlier_probs - tf.reduce_min(inlier_probs)
-        inlier_probs = tf.div_no_nan(inlier_probs, tf.reduce_max(inlier_probs))
+    #if normalize:
+    #    inlier_probs = inlier_probs - tf.reduce_min(inlier_probs)
+    #    inlier_probs = tf.div_no_nan(inlier_probs, tf.reduce_max(inlier_probs))
 
     return inlier_probs
 

@@ -379,12 +379,12 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
 
     # Normalize inlier probabilities to get weights.
-    inlier_prob = tf.divide(inlier_prob,
-                            tf.clip_by_value(tf.reduce_sum(inlier_prob), clip_value_min=1e-20, clip_value_max=1e30))
+    #inlier_prob = tf.divide(inlier_prob,
+    #                        tf.clip_by_value(tf.reduce_sum(inlier_prob), clip_value_min=1e-20, clip_value_max=1e30))
     weights = tf.squeeze(inlier_prob, axis=3)
 
-    # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
-    loss = tf.reduce_sum(epipolar_errors_squared(predict_fun, flow, weights, normalize=True, debug=True))
+    #loss = tf.reduce_sum(epipolar_errors_squared(predict_fun, flow, weights, normalize=True, debug=True))    
+    loss = tf.reduce_mean(epipolar_errors_squared(predict_fun, flow, weights, normalize=True, debug=True))
 
     return loss
 

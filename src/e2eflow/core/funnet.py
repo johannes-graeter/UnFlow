@@ -24,10 +24,12 @@ def funnet(flow):
         # Backend
         net = conv_activations[-1]
 
-        with slim.arg_scope([slim.conv2d],
-                            outputs_collections="preproc",
-                            activation_fn=tf.nn.relu,
-                            weights_regularizer=slim.l2_regularizer(1e-5)):
+        with slim.arg_scope([slim.fully_connected],
+                            biases_initializer=tf.constant_initializer(0.001),
+                            weights_regularizer=slim.l2_regularizer(0.05),
+                            weights_initializer=trunc_normal(0.1),
+                            outputs_collections="motion_angles"):
+
             # Reduce information for fully connected.
             # Use conv2d instead of fully_connected layers.
             net = slim.conv2d(net, 1024, [1, 1], scope='fc7')
@@ -36,11 +38,11 @@ def funnet(flow):
             net = slim.conv2d(net, 10, [1, 1], scope='fc8')
             # end_points[sc.name + '/fc8'] = net
 
-        with slim.arg_scope([slim.fully_connected],
-                            outputs_collections="motion_angles",
-                            biases_initializer=tf.constant_initializer(0.001),
-                            weights_initializer=trunc_normal(0.1),
-                            weights_regularizer=slim.l2_regularizer(1e-5)):
+        #with slim.arg_scope([slim.fully_connected],
+        #                    outputs_collections="motion_angles",
+        #                    biases_initializer=tf.constant_initializer(0.001),
+        #                    weights_initializer=trunc_normal(0.1),
+        #                    weights_regularizer=slim.l2_regularizer(1e-5)):
             # Reshape for fully connected net.
             bs, height, width, channels = net.shape.as_list()
             net = tf.reshape(net, (bs, height * width * channels))
@@ -48,7 +50,7 @@ def funnet(flow):
             # Sascha says dropout is awesome!
             # Also do dropout in inference,
             # You can calculate the epistemic error by foing forward inference a few times.
-            net = slim.dropout(net, 0.2, is_training=True, scope='dropout7')
+            # net = slim.dropout(net, 0.2, is_training=True, scope='dropout7')
 
             # Learn motion from feature map (net).
             # Should have reasonable height and width to preserve spatial information.

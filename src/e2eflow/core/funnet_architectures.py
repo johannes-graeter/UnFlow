@@ -25,7 +25,8 @@ def trunc_normal(stddev):
 def default_frontend_arg_scope():
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         activation_fn=tf.nn.relu,
-                        weights_regularizer=slim.l2_regularizer(1e-5),
+			biases_initializer=tf.constant_initializer(0.1),
+                        weights_regularizer=slim.l2_regularizer(0.05),
                         outputs_collections='funnet'):
         with slim.arg_scope([slim.conv2d], padding='SAME'):
             with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
@@ -45,7 +46,7 @@ def custom_frontend(inputs, scope='custom_frontend'):
                 return cnv1b
 
             # Collect outputs for conv2d, fully_connected and max_pool2d.
-            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection], activation_fn=tf.nn.relu):
+            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
                 # This is same as compression layer for lowe's net with stride 1 for last conv layer
                 # for larger width and height
                 cnv1 = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
@@ -111,7 +112,7 @@ def exp_mask_layers(conv_activations, flow, mask_channels, scope='exp'):
         end_points_collection = sc.original_name_scope  # + '_end_points'
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                             normalizer_fn=None,
-                            weights_regularizer=slim.l2_regularizer(1e-5),
+                            weights_regularizer=slim.l2_regularizer(0.05),
                             activation_fn=tf.nn.relu,
                             outputs_collections=end_points_collection):
             # Skip connections and bottleneck.
@@ -254,7 +255,7 @@ def motion_net_lowe(flow):
             end_points_collection = sc.original_name_scope + '_end_points'
             with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                                 normalizer_fn=None,
-                                weights_regularizer=slim.l2_regularizer(1e-5),
+                                weights_regularizer=slim.l2_regularizer(0.05),
                                 activation_fn=tf.nn.relu,
                                 outputs_collections=end_points_collection):
                 # cnv1 to cnv5b are shared between pose and explainability prediction

@@ -151,7 +151,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
     bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
 
-    mask_regularization_loss = tf.scalar_mul(1.0, fw_mask_loss + bw_mask_loss)
+    mask_regularization_loss = tf.scalar_mul(1.5, fw_mask_loss + bw_mask_loss)
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
