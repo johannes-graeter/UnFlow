@@ -22,7 +22,7 @@ def funnet(flow):
         # # Mask layers
         # mask, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
         # end_points.update(end_points_mask)
-        mask = get_reference_explain_mask(flow, values=np.array([-np.inf, np.inf]))
+        mask = get_reference_explain_mask(flow.shape.as_list(), values=np.array([-np.inf, np.inf]))
 
         # Backend
         net = conv_activations[-1]

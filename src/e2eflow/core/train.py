@@ -209,7 +209,7 @@ class Trainer:
         def _add_summaries():
             _add_loss_summaries()
             _add_param_summaries()
-            _add_variable_summaries()
+            # _add_variable_summaries()
             _add_tensor_summaries('tracked_tensors')
             if self.debug:
                 _add_image_summaries()
