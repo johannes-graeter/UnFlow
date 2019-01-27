@@ -26,7 +26,7 @@ def funnet(flow):
 
         with slim.arg_scope([slim.fully_connected],
                             biases_initializer=tf.constant_initializer(0.001),
-                            weights_regularizer=slim.l2_regularizer(0.05),
+                            weights_regularizer=slim.l2_regularizer(1e-4),
                             weights_initializer=trunc_normal(0.1),
                             outputs_collections="motion_angles"):
 

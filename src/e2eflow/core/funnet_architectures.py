@@ -26,7 +26,7 @@ def default_frontend_arg_scope():
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         activation_fn=tf.nn.relu,
 			biases_initializer=tf.constant_initializer(0.1),
-                        weights_regularizer=slim.l2_regularizer(0.05),
+                        weights_regularizer=slim.l2_regularizer(1e-4),
                         outputs_collections='funnet'):
         with slim.arg_scope([slim.conv2d], padding='SAME'):
             with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
@@ -112,7 +112,7 @@ def exp_mask_layers(conv_activations, flow, mask_channels, scope='exp'):
         end_points_collection = sc.original_name_scope  # + '_end_points'
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                             normalizer_fn=None,
-                            weights_regularizer=slim.l2_regularizer(0.05),
+                            weights_regularizer=slim.l2_regularizer(1e-4),
                             activation_fn=tf.nn.relu,
                             outputs_collections=end_points_collection):
             # Skip connections and bottleneck.
@@ -255,7 +255,7 @@ def motion_net_lowe(flow):
             end_points_collection = sc.original_name_scope + '_end_points'
             with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                                 normalizer_fn=None,
-                                weights_regularizer=slim.l2_regularizer(0.05),
+                                weights_regularizer=slim.l2_regularizer(1e-4),
                                 activation_fn=tf.nn.relu,
                                 outputs_collections=end_points_collection):
                 # cnv1 to cnv5b are shared between pose and explainability prediction
