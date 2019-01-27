@@ -7,7 +7,7 @@ from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp_reg_loss
-from .util import add_to_debug_output, add_to_output, get_inlier_prob_from_mask_logits
+from .util import add_to_debug_output, add_to_output, get_inlier_prob_from_mask_logits, get_reference_explain_mask
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -133,24 +133,36 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Add loss from epipolar geometry for forward pass.
     motion_angles, mask_logits = funnet(flows_fw[0])
     # Convert mask of logits to inlier probability.
-    inlier_probs = get_inlier_prob_from_mask_logits(mask_logits)
-
+    if mask_logits is None:
+        inlier_probs = get_reference_explain_mask(flows_fw[0].shape.as_list())
+    else:
+        inlier_probs = get_inlier_prob_from_mask_logits(mask_logits)
     # Upscale for flow weighting. Same method as for upscaling final_flow_fw.
     inlier_probs_full_res = tf.image.resize_bilinear(inlier_probs, im_shape)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs_full_res, intrin)
 
     # Add loss from epipolar geometry for backward pass (more training data).
     motion_angles_bw, mask_logits_bw = funnet(flows_bw[0])  # uses auto_reuse
-    inlier_probs_bw_full_res = tf.image.resize_bilinear(get_inlier_prob_from_mask_logits(mask_logits_bw), im_shape)
+    if mask_logits_bw is None:
+        inlier_probs_bw = get_reference_explain_mask(flows_bw[0].shape.as_list())
+    else:
+        inlier_probs_bw = get_inlier_prob_from_mask_logits(mask_logits_bw)
+    inlier_probs_bw_full_res = tf.image.resize_bilinear(inlier_probs_bw, im_shape)
     fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
-    # Regularize to pull all inlier probs towards 1.
-    fw_mask_loss = compute_exp_reg_loss(mask_logits)
+    if mask_logits is not None:
+        # Regularize to pull all inlier probs towards 1.
+        fw_mask_loss = compute_exp_reg_loss(mask_logits)
+    else:
+        fw_mask_loss = 0.
 
-    # Regularize backward inlier mask to be very similar to forward mask.
-    warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
-    bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
-
+    if mask_logits_bw is not None:
+        # Regularize backward inlier mask to be very similar to forward mask.
+        warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
+        bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
+    else:
+        bw_mask_loss = 0.
+        
     mask_regularization_loss = tf.scalar_mul(1.5, fw_mask_loss + bw_mask_loss)
 
     # Add losses from funnet to problem.

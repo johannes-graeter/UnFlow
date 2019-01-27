@@ -17,9 +17,10 @@ def funnet(flow):
         # Get flow feature map from fully convolutional frontend.
         conv_activations, end_points = frontend(flow, scope=sc.original_name_scope)
 
-        # Mask layers
-        mask, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
-        end_points.update(end_points_mask)
+        # # Mask layers
+        # mask, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
+        # end_points.update(end_points_mask)
+        mask = None
 
         # Backend
         net = conv_activations[-1]
