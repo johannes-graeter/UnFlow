@@ -24,9 +24,9 @@ def funnet(flow):
         # Backend
         net = conv_activations[-1]
 
-        with slim.arg_scope([slim.fully_connected],
+        with slim.arg_scope([slim.fully_connected, slim.conv2d],
                             biases_initializer=tf.constant_initializer(0.001),
-                            weights_regularizer=slim.l2_regularizer(1e-4),
+                            weights_regularizer=slim.l2_regularizer(1e-5),
                             weights_initializer=trunc_normal(0.1),
                             outputs_collections="motion_angles"):
 

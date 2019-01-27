@@ -26,7 +26,7 @@ def default_frontend_arg_scope():
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         activation_fn=tf.nn.relu,
 			biases_initializer=tf.constant_initializer(0.1),
-                        weights_regularizer=slim.l2_regularizer(1e-4),
+                        weights_regularizer=slim.l2_regularizer(1e-5),
                         outputs_collections='funnet'):
         with slim.arg_scope([slim.conv2d], padding='SAME'):
             with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
