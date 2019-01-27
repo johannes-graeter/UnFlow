@@ -1,6 +1,8 @@
 import tensorflow as tf
+import numpy as np
 
 from .funnet_architectures import custom_frontend, exp_mask_layers, trunc_normal
+from .util import get_reference_explain_mask
 
 slim = tf.contrib.slim
 
@@ -20,7 +22,7 @@ def funnet(flow):
         # # Mask layers
         # mask, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
         # end_points.update(end_points_mask)
-        mask = None
+        mask = get_reference_explain_mask(flow, values=np.array([-np.inf, np.inf]))
 
         # Backend
         net = conv_activations[-1]

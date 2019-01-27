@@ -294,10 +294,9 @@ def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=No
     return error_vec
 
 
-def get_reference_explain_mask(mask_shape, downscaling=0):
+def get_reference_explain_mask(mask_shape, downscaling=0, values=np.array([0, 1])):
     batch_size, height, width, _ = mask_shape
-    tmp = np.array([0, 1])
-    ref_exp_mask = np.tile(tmp,
+    ref_exp_mask = np.tile(values,
                            (batch_size,
                             int(height / (2 ** downscaling)),
                             int(width / (2 ** downscaling)),
@@ -307,10 +306,7 @@ def get_reference_explain_mask(mask_shape, downscaling=0):
 
 
 def get_inlier_prob_from_mask_logits(cur_exp_logits, normalize=False):
-    if cur_exp_logits is not None:
-        cur_exp = tf.nn.softmax(cur_exp_logits)
-    else:
-        cur_exp = get_reference_explain_mask(cur_exp_logits.shape.as_list())
+    cur_exp = tf.nn.softmax(cur_exp_logits)
     inlier_probs = cur_exp[:, :, :, 1]  # inlier prob
 
     inlier_probs = tf.expand_dims(inlier_probs, axis=3)

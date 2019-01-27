@@ -144,18 +144,12 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     inlier_probs_bw_full_res = tf.image.resize_bilinear(inlier_probs_bw, im_shape)
     fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
-    if mask_logits is not None:
-        # Regularize to pull all inlier probs towards 1.
-        fw_mask_loss = compute_exp_reg_loss(mask_logits)
-    else:
-        fw_mask_loss = 0.
+    # Regularize to pull all inlier probs towards 1.
+    fw_mask_loss = compute_exp_reg_loss(mask_logits)
 
-    if mask_logits_bw is not None:
-        # Regularize backward inlier mask to be very similar to forward mask.
-        warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
-        bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
-    else:
-        bw_mask_loss = 0.
+    # Regularize backward inlier mask to be very similar to forward mask.
+    warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
+    bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
 
     mask_regularization_loss = tf.scalar_mul(1.5, fw_mask_loss + bw_mask_loss)
 
