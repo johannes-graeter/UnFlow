@@ -307,13 +307,16 @@ def get_reference_explain_mask(mask_shape, downscaling=0):
 
 
 def get_inlier_prob_from_mask_logits(cur_exp_logits, normalize=False):
-    cur_exp = tf.nn.softmax(cur_exp_logits)
+    if cur_exp_logits is not None:
+        cur_exp = tf.nn.softmax(cur_exp_logits)
+    else:
+        cur_exp = get_reference_explain_mask(cur_exp_logits.shape.as_list())
     inlier_probs = cur_exp[:, :, :, 1]  # inlier prob
 
     inlier_probs = tf.expand_dims(inlier_probs, axis=3)
 
     # Normalize probabilities from 1 to zero.
-    #if normalize:
+    # if normalize:
     #    inlier_probs = inlier_probs - tf.reduce_min(inlier_probs)
     #    inlier_probs = tf.div_no_nan(inlier_probs, tf.reduce_max(inlier_probs))
 
