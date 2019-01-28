@@ -64,17 +64,16 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
 
     for i, finetune_ckpt in enumerate(restore_external_nets):
         print('-- restore', net_names[i], finetune_ckpt.model_checkpoint_path)
+
+        nets_to_restore = [net_names[i]]
+        variables_to_restore = slim.get_variables_to_restore(
+            include=nets_to_restore)
+
         try:
-            nets_to_restore = [net_names[i]]
-            variables_to_restore = slim.get_variables_to_restore(
-                include=nets_to_restore)
             restorer = tf.train.Saver(variables_to_restore)
             restorer.restore(sess, finetune_ckpt.model_checkpoint_path)
         except:
             # load partial network (missing final 2 upconvolutions)
-            nets_to_restore = [net_names[i]]
-            variables_to_restore = slim.get_variables_to_restore(
-                include=nets_to_restore)
             variables_to_restore = [v for v in variables_to_restore
                                     if not 'full_res' in v.name]
             restorer = tf.train.Saver(variables_to_restore)
@@ -83,7 +82,7 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
     # Restore currently training net always last, so that restored values maybe overriden.
     if ckpt is not None:
         # continue training
-        print('-- training ', ckpt.model_checkpoint_path)
+        print('-- restore and train ', ckpt.model_checkpoint_path)
         saver.restore(sess, ckpt.model_checkpoint_path)
         saver.recover_last_checkpoints(ckpt.all_model_checkpoint_paths)
     return saver
@@ -184,9 +183,14 @@ class Trainer:
         print('-- training from i = {} to {}'.format(start_iter, max_iter))
 
         # assert (max_iter - start_iter + 1) % save_interval == 0
-        for i in range(start_iter, max_iter + 1, save_interval):
-            self.train(i, i + save_interval - 1, i - (min_iter + 1))
-            # self.eval(1)
+        # for i in range(start_iter, max_iter + 1, save_interval):
+        #     self.train(i, i + save_interval - 1, i - (min_iter + 1))
+        #     # self.eval(1)
+        i = start_iter
+        while i < max_iter:
+            current_iter = self.train(i, i + save_interval - 1, i - (min_iter + 1))
+            i = current_iter + 1
+            # # self.eval(1)
 
         if self.plot_proc:
             self.plot_proc.join()
@@ -201,7 +205,7 @@ class Trainer:
         def _add_summaries():
             _add_loss_summaries()
             _add_param_summaries()
-            _add_variable_summaries()
+            # _add_variable_summaries()
             _add_tensor_summaries('tracked_tensors')
             if self.debug:
                 _add_image_summaries()
@@ -325,9 +329,10 @@ class Trainer:
                     except tf.errors.OutOfRangeError as exc:
                         print(exc)
                         print("error in iteration {}".format(i))
-                        coord.request_stop()
+                        # coord.request_stop()
 
                 save_path = os.path.join(self.ckpt_dir, 'model.ckpt')
+                print("save iteration {}".format(save_iter))
                 saver.save(sess, save_path, global_step=save_iter)
 
                 summary_writer.close()
@@ -340,6 +345,8 @@ class Trainer:
                     if any(t.is_alive() for t in threads):
                         raise Exception("Not all threads are dead...")
                     print("All threads are dead, continue!")
+
+                return save_iter
 
     def eval(self, num):
         assert num == 1  # TODO enable num > 1

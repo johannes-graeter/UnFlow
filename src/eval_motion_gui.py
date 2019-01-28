@@ -198,9 +198,6 @@ def add_motion_to_display(imgs, motions, scales):
 
     traj_imgs = np.array(
         draw_trajectory(np.array(accumulate_motion(motions, scales=scales, invert=True)), min_res=(height1, height1)))
-    s = list(imgs.shape)
-    s[1] = 1
-    imgs = np.concatenate((imgs, np.ones(s, dtype=float)), axis=1)
     height0 = traj_imgs.shape[1]
     width0 = traj_imgs.shape[2]
 
@@ -225,11 +222,11 @@ def get_keypoints(image, feature_params):
 
 
 def add_flow_to_display(imgs, flows, params):
-    first_imgs = imgs[:, -1, 0, :, :]  # im1 for whole sequence
+    first_imgs = imgs[:, -2, 0, :, :]  # im1 for whole sequence
     points = get_keypoints(first_imgs[0, :, :, :], params['feature_params'])
     tracked_points = track_points(flows, points)
     track_imgs = draw_tracked_points(tracked_points, first_imgs)
-    imgs[:, -1, 0, :, :] = track_imgs
+    imgs[:, -2, 0, :, :] = track_imgs
 
     return imgs
 
@@ -238,7 +235,7 @@ def main(argv=None):
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
     print("-- evaluating: on {} pairs from {}/{}"
-          .format(FLAGS.num, FLAGS.dataset, FLAGS.variant))
+          .format(FLAGS.num, 'kitti_odometry', 'test_set'))
 
     default_config = config_dict()
     dirs = default_config['dirs']
@@ -248,34 +245,35 @@ def main(argv=None):
 
     if FLAGS.dataset == 'kitti':
         data = KITTIDataOdometry(dirs['data_testing'], development=False, do_fetch=False)
-        data_input = KITTIInput(data, batch_size=1, normalize=False, dims=input_dims)
+        data_input = KITTIInput(data, batch_size=1, normalize=False, dims=input_dims, num_threads=1)
     else:
         raise Exception("Motion eval only implemented for KITTI yet!")
 
     input_fn0 = getattr(data_input, 'input_raw')
     shift = np.random.randint(0, 1e6)  # get different set of images each call
     print("shift by {} images".format(shift))
+    shift = 215441
 
     def input_fn():
         return input_fn0(augment_crop=False, center_crop=True, seed=None, swap_images=False, shift=shift)
 
     results = []
-    for name in FLAGS.ex.split(','):
+    for n, name in enumerate(FLAGS.ex.split(',')):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
         # Motion angles are roll, pitch,yaw, translation_yaw, translation ptich from current image to last image
         display_images, image_names, flows, motion_angles = eval_gui.evaluate_experiment(name, input_fn, data_input,
                                                                                          do_resize=False)
         flows = np.squeeze(np.array(flows), axis=1)
-        imgs = np.array(display_images)
+
+        # Add ones for motion plotting and convert to numpy
+        for l in display_images:
+            l.append(np.ones_like(l[0]))
+        imgs = np.array(display_images, copy=False, subok=True)
 
         # Draw image with tracked features.
         params = {
-            'feature_params': dict(maxCorners=1000,
-                                   qualityLevel=0.3,
-                                   minDistance=10,
-                                   blockSize=7)
-            ,
+            'feature_params': dict(maxCorners=1000, qualityLevel=0.3, minDistance=10, blockSize=7),
             'resample_rate': 10}
         imgs = add_flow_to_display(imgs, flows, params)
         image_names[-1] = "tracklets"
@@ -287,6 +285,11 @@ def main(argv=None):
         scales = np.ones((motion_angles.shape[0])) * (-0.5)
         imgs = add_motion_to_display(imgs, motion_angles, scales)
         image_names.append("motion")
+
+        for i in range(imgs.shape[0]):
+            imgs[i, -3, :, :, :] = imgs[i, -3, :, :, :] - imgs[i, -3, :, :, :].min()
+            imgs[i, -3, :, :, :] = imgs[i, -3, :, :, :] / imgs[i, -3, :, :, :].max()
+        image_names[-3] = "inlier_prob_normalized"
 
         results.append(imgs)
 

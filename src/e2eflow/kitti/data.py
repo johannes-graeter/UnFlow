@@ -112,14 +112,14 @@ class KITTIDataRaw(Data):
     def get_raw_dirs(self):
         dirs = []
         for extract_path in self._get_paths()[0]:
-            image_folder = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            image_folder = [os.path.join(extract_path, n) + "/" for n in self.image_subdirs]
             dirs.extend(image_folder)
         return dirs
 
     def get_intrinsic_dirs(self):
         calibs = {}
         for extract_path, calib_path in zip(*self._get_paths()):
-            image_folders = [os.path.join(extract_path, n) for n in self.image_subdirs]
+            image_folders = [os.path.join(extract_path, n) + "/" for n in self.image_subdirs]
             calib_file = os.path.join(calib_path, self.calib_name)
             for f, ident in zip(image_folders, self.calib_identifiers):
                 calibs[f] = [calib_file, ident]

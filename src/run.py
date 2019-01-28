@@ -47,6 +47,8 @@ def main(argv=None):
                               development=run_config['development'], do_fetch=False)
     einput = KITTIInput(data=edata, batch_size=1, normalize=False)
 
+    print('Read training data from {}'.format(dirs['data_training']))
+
     if 'kitti' in train_dataset:
         if train_dataset == 'kitti_raw':
             data = KITTIDataRaw(data_dir=dirs['data_training'], fast_dir=dirs.get('fast'), stat_log_dir=None,
@@ -83,7 +85,9 @@ def main(argv=None):
         lambda shift: input.input_raw(swap_images=False,
                                       augment_crop=False,
                                       center_crop=True,
-                                      shift=shift * run_config['batch_size']),
+                                      shift=shift * run_config['batch_size'],
+                                      seed=126324  # initialize with constant seed in order to redo training.
+                                      ),
         lambda: einput.input_raw(swap_images=False,
                                  augment_crop=False,
                                  center_crop=True),
