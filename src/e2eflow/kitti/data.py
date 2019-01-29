@@ -1,9 +1,9 @@
 import os
 
 from . import raw_records
+from .input import frame_name_to_num_kitti
 from ..core.data import Data
 from ..util import tryremove
-from .input import frame_name_to_num_kitti
 
 
 def exclude_test_and_train_images(kitti_dir, exclude_lists_dir, exclude_target_dir,

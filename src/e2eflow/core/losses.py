@@ -1,11 +1,11 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.distributions import Normal
-from tensorflow.python.ops import math_ops
 
 from .image_warp import image_warp
-from .util import epipolar_errors
+from .util import epipolar_errors_squared
 from .util import get_fundamental_matrix
+from .util import get_reference_explain_mask
 from ..ops import forward_warp
 
 DISOCC_THRESH = 0.8
@@ -378,19 +378,31 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
     # Epipolar error of flow
     predict_fun = get_fundamental_matrix(motion_angle_prediction, intrinsics)
 
+    # Normalize inlier probabilities to get weights.
+    inlier_prob = tf.divide(inlier_prob,
+                            tf.clip_by_value(tf.reduce_sum(inlier_prob), clip_value_min=1e-20, clip_value_max=1e30))
+    weights = tf.squeeze(inlier_prob, axis=3)
+
     # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
-    loss = math_ops.reduce_mean(epipolar_errors(predict_fun, flow, tf.squeeze(inlier_prob, axis=3)
-                                                , normalize=True, debug=True))
+    loss = tf.reduce_sum(epipolar_errors_squared(predict_fun, flow, weights, normalize=True, debug=True))
     
     # Add loss
     tf.losses.add_loss(loss)
 
-    # Return the 'total' loss: loss fns + regularization terms defined in the model
-    return tf.losses.get_total_loss()
+    return loss
 
 
-def compute_exp_reg_loss(pred, ref):
-    l = tf.nn.softmax_cross_entropy_with_logits(
+def compute_exp_reg_loss(pred, ref=None):
+    # Default reference labels are 0,1
+    if ref is None:
+        b, h, w, c = pred.shape.as_list()
+        assert (c == 2)
+        ref = get_reference_explain_mask(pred.shape.as_list())
+
+    # Loss is cross entropy loss to reference.
+    # Probably version two is not needed.
+    l = tf.nn.softmax_cross_entropy_with_logits_v2(
         labels=tf.reshape(ref, [-1, 2]),
         logits=tf.reshape(pred, [-1, 2]))
+
     return tf.reduce_mean(l)

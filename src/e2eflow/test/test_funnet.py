@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 # from .funnet import FunNet
-from ..core.util import epipolar_errors
+from ..core.util import epipolar_errors_squared
 from ..core.util import get_fundamental_matrix as get_fun_tf
 
 
@@ -76,8 +76,8 @@ class TestEpipolarError(unittest.TestCase):
         f0 = tf.expand_dims(tf.convert_to_tensor(F.reshape(1, 9), np.float32), axis=2)
 
         # Test unnormalized
-        errs0 = epipolar_errors(f0, flow_tf, normalize=False)
-        errs1 = epipolar_errors(f0, flow_tf)
+        errs0 = epipolar_errors_squared(f0, flow_tf, normalize=False)
+        errs1 = epipolar_errors_squared(f0, flow_tf)
 
         with tf.Session() as sess:
             a = tf.reduce_sum(errs0).eval()

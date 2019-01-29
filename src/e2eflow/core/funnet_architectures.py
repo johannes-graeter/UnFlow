@@ -22,11 +22,10 @@ def trunc_normal(stddev):
     return tf.truncated_normal_initializer(0.0, stddev)
 
 
-def default_frontend_arg_scope(weight_decay=0.0005):
+def default_frontend_arg_scope():
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         activation_fn=tf.nn.relu,
-                        biases_initializer=tf.constant_initializer(0.1),
-                        weights_regularizer=slim.l2_regularizer(weight_decay),
+                        weights_regularizer=slim.l2_regularizer(1e-3),
                         outputs_collections='funnet'):
         with slim.arg_scope([slim.conv2d], padding='SAME'):
             with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
@@ -36,7 +35,7 @@ def default_frontend_arg_scope(weight_decay=0.0005):
 def custom_frontend(inputs, scope='custom_frontend'):
     print("inputs", inputs.shape.as_list())
     """Inspired by pose_exp_net from SFM Learner and simple_sencoder from struct2depth (b-layers)"""
-    with slim.arg_scope(default_frontend_arg_scope(0.05)):
+    with slim.arg_scope(default_frontend_arg_scope()):
         with tf.variable_scope(scope, 'custom_frontend', [inputs]) as sc:
             end_points_collection = sc.original_name_scope  # + '_end_points'
 
@@ -46,7 +45,7 @@ def custom_frontend(inputs, scope='custom_frontend'):
                 return cnv1b
 
             # Collect outputs for conv2d, fully_connected and max_pool2d.
-            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection]):
+            with slim.arg_scope([slim.conv2d], outputs_collections=[end_points_collection], activation_fn=tf.nn.relu):
                 # This is same as compression layer for lowe's net with stride 1 for last conv layer
                 # for larger width and height
                 cnv1 = slim.conv2d(inputs, 16, [7, 7], stride=2, scope='cnv1')
@@ -112,7 +111,7 @@ def exp_mask_layers(conv_activations, flow, mask_channels, scope='exp'):
         end_points_collection = sc.original_name_scope  # + '_end_points'
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                             normalizer_fn=None,
-                            weights_regularizer=slim.l2_regularizer(0.05),
+                            weights_regularizer=slim.l2_regularizer(1e-2),
                             activation_fn=tf.nn.relu,
                             outputs_collections=end_points_collection):
             # Skip connections and bottleneck.
@@ -124,32 +123,32 @@ def exp_mask_layers(conv_activations, flow, mask_channels, scope='exp'):
             icnv5 = decoder_unit(bottleneck, 128, [3, 3], stride=1, scope='upcnv5', skip_connection=cnv4)
 
             icnv4 = decoder_unit(icnv5, 64, [3, 3], stride=2, scope='upcnv4', skip_connection=cnv3)
-            mask4 = slim.conv2d(icnv4, mask_channels, [3, 3], stride=1, scope='mask4',
-                                normalizer_fn=None, activation_fn=None)
-            _track_mask(mask4, "mask4")
+            # mask4 = slim.conv2d(icnv4, mask_channels, [3, 3], stride=1, scope='mask4',
+            #                     normalizer_fn=None, activation_fn=None)
+            # _track_mask(mask4, "mask4")
 
             icnv3 = decoder_unit(icnv4, 32, [3, 3], stride=2, scope='upcnv3', skip_connection=cnv2)
-            mask3 = slim.conv2d(icnv3, mask_channels, [3, 3], stride=1, scope='mask3',
-                                normalizer_fn=None, activation_fn=None)
-            _track_mask(mask3, "mask3")
+            # mask3 = slim.conv2d(icnv3, mask_channels, [3, 3], stride=1, scope='mask3',
+            #                     normalizer_fn=None, activation_fn=None)
+            # _track_mask(mask3, "mask3")
 
             icnv2 = decoder_unit(icnv3, 16, [5, 5], stride=2, scope='upcnv2', skip_connection=cnv1)
-            mask2 = slim.conv2d(icnv2, mask_channels, [5, 5], stride=1, scope='mask2',
-                                normalizer_fn=None, activation_fn=None)
-            _track_mask(mask2, "mask2")
+            # mask2 = slim.conv2d(icnv2, mask_channels, [5, 5], stride=1, scope='mask2',
+            #                     normalizer_fn=None, activation_fn=None)
+            # _track_mask(mask2, "mask2")
 
             # skip flow to this layer.
             icnv1 = decoder_unit(icnv2, 16, [7, 7], stride=2, scope='upcnv1', skip_connection=flow)
             mask1 = slim.conv2d(icnv1, mask_channels, [7, 7], stride=1, scope='mask1',
                                 normalizer_fn=None, activation_fn=None)
-            _track_mask(mask1, "mask1")
+            # _track_mask(mask1, "mask1")
 
             print("-----------")
             for m in [icnv5, icnv4, icnv3, icnv2, icnv1]:
                 print(m.shape.as_list())
 
     end_points = slim.utils.convert_collection_to_dict(end_points_collection)
-    return [mask1, mask2, mask3, mask4], end_points
+    return mask1, end_points
 
 
 def alexnet_v2(inputs,
@@ -183,7 +182,7 @@ def alexnet_v2(inputs,
         or None).
       end_points: a dict of tensors with intermediate activations.
     """
-    with slim.arg_scope(default_frontend_arg_scope(0.05)):
+    with slim.arg_scope(default_frontend_arg_scope()):
         with tf.variable_scope(scope, 'alexnet_v2', [inputs]) as sc:
             end_points_collection = sc.original_name_scope  # + '_end_points'
 
@@ -255,7 +254,7 @@ def motion_net_lowe(flow):
             end_points_collection = sc.original_name_scope + '_end_points'
             with slim.arg_scope([slim.conv2d, slim.conv2d_transpose],
                                 normalizer_fn=None,
-                                weights_regularizer=slim.l2_regularizer(0.05),
+                                weights_regularizer=slim.l2_regularizer(1e-3),
                                 activation_fn=tf.nn.relu,
                                 outputs_collections=end_points_collection):
                 # cnv1 to cnv5b are shared between pose and explainability prediction

@@ -174,7 +174,6 @@ class Input:
 
         filenames = []
         for dir_path in data_dirs:
-
             files = glob.glob(dir_path + "*.png")  # That also support cityscapes.
             files.sort()
             if sequence:
@@ -234,8 +233,7 @@ class Input:
                 # img_h, img_w, ch = image_1.shape.as_list()
                 # if (out_height > img_h) or (out_width > img_w):
                 # raise Exception("No crop for augmentation possible, input image too small.")
-                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_h,
-                                                               out_w=out_w)
+                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_h, out_w=out_w)
             elif center_crop:
                 image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
                 image_2, _ = self._resize_crop_or_pad(image_2)
