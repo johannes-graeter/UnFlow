@@ -139,33 +139,34 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     inlier_probs_full_res = tf.image.resize_bilinear(inlier_probs, im_shape)
     fun_loss = funnet_loss(motion_angles, final_flow_fw, inlier_probs_full_res, intrin)
 
-    # Add loss from epipolar geometry for backward pass (more training data).
-    motion_angles_bw, mask_logits_bw = funnet(flows_bw[0])  # uses auto_reuse
-    inlier_probs_bw_full_res = tf.image.resize_bilinear(get_inlier_prob_from_mask_logits(mask_logits_bw), im_shape)
-    fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
-
     # Regularize to pull all inlier probs towards 1.
     fw_mask_loss = compute_exp_reg_loss(mask_logits)
 
-    # Regularize backward inlier mask to be very similar to forward mask.
-    warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
-    bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
+    # Add loss from epipolar geometry for backward pass (more training data).
+    # motion_angles_bw, mask_logits_bw = funnet(flows_bw[0])  # uses auto_reuse
+    # inlier_probs_bw_full_res = tf.image.resize_bilinear(get_inlier_prob_from_mask_logits(mask_logits_bw), im_shape)
+    # fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
-    mask_regularization_loss = tf.scalar_mul(1.0, fw_mask_loss + bw_mask_loss)
+    # # Regularize backward inlier mask to be very similar to forward mask.
+    # warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
+    # bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
+
+    weight_fw = tf.Variable(initial_value=0., trainable=True)
+    weight_fw_mask = tf.Variable(initial_value=0., trainable=True)
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
-        combined_loss = params.get('epipolar_loss_weight') * fun_loss
-        combined_loss += params.get('epipolar_loss_weight') * fun_loss_bw
-
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
+        final_loss = regularization_loss \
+                     + tf.exp(-weight_fw) * fun_loss + tf.exp(-weight_fw_mask) * fw_mask_loss + weight_fw + weight_fw_mask \
+                     #+ tf.exp(-weight_bw) * fun_loss_bw + tf.exp(-weight_bw_mask) * bw_mask_loss + weight_bw + weight_bw_mask
+
     else:
-        combined_loss += params.get('epipolar_loss_weight') * fun_loss
-        combined_loss += params.get('epipolar_loss_weight') * fun_loss_bw
-
+        raise Exception("Not implemented flow estimation with motion yet.")
         regularization_loss = tf.losses.get_regularization_loss()
-
-    final_loss = combined_loss + regularization_loss + mask_regularization_loss
+        # final_loss = regularization_loss + tf.exp(-weight_flow) * combined_loss + weight_flow\
+        #              + tf.exp(-weight_fw) * fun_loss + tf.exp(-weight_fw_mask) * fw_mask_loss + weight_fw + weight_fw_mask \
+        #              #+ tf.exp(-weight_bw) * fun_loss_bw + tf.exp(-weight_bw_mask) * bw_mask_loss + weight_bw + weight_bw_mask
 
     ##################################
     #  DEBUG
@@ -186,7 +187,9 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Add regularization loss of mask to problem.
     _track_loss(mask_regularization_loss, 'loss/reg_mask')
     _track_loss(fw_mask_loss, 'loss/reg_mask_fw')
-    _track_loss(bw_mask_loss, 'loss/reg_mask_bw')
+    _track_loss(weight_fw, 'loss/weight_fw')
+    _track_loss(weight_fw_mask, 'loss/weight_fw_mask')
+    # _track_loss(bw_mask_loss, 'loss/reg_mask_bw')
 
     _track_loss(final_loss, 'loss/final')
 
