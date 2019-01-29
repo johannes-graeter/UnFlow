@@ -143,27 +143,32 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     fw_mask_loss = compute_exp_reg_loss(mask_logits)
 
     # Add loss from epipolar geometry for backward pass (more training data).
-    # motion_angles_bw, mask_logits_bw = funnet(flows_bw[0])  # uses auto_reuse
-    # inlier_probs_bw_full_res = tf.image.resize_bilinear(get_inlier_prob_from_mask_logits(mask_logits_bw), im_shape)
-    # fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
+    motion_angles_bw, mask_logits_bw = funnet(flows_bw[0])  # uses auto_reuse
+    inlier_probs_bw_full_res = tf.image.resize_bilinear(get_inlier_prob_from_mask_logits(mask_logits_bw), im_shape)
+    fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
-    # # Regularize backward inlier mask to be very similar to forward mask.
-    # warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
-    # bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
+    # Regularize backward inlier mask to be very similar to forward mask.
+    warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
+    bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
 
-    weight_fw = tf.Variable(initial_value=0., trainable=True)
-    weight_fw_mask = tf.Variable(initial_value=0., trainable=True)
+    loss_unc = tf.get_variable('loss_uncertainty_weights', shape=[5])
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
         final_loss = regularization_loss \
-                     + tf.exp(-weight_fw) * fun_loss + tf.exp(-weight_fw_mask) * fw_mask_loss + weight_fw + weight_fw_mask \
-                     #+ tf.exp(-weight_bw) * fun_loss_bw + tf.exp(-weight_bw_mask) * bw_mask_loss + weight_bw + weight_bw_mask
+                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[0]), fun_loss) \
+                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[1]), fw_mask_loss) \
+                     + tf.scalar_mul(0.5, loss_unc[0]) \
+                     + tf.scalar_mul(0.5, loss_unc[1]) \
+                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[2]), fun_loss_bw) \
+                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[3]), bw_mask_loss) \
+                     + tf.scalar_mul(0.5, loss_unc[2]) \
+                     + tf.scalar_mul(0.5, loss_unc[3])
 
     else:
         raise Exception("Not implemented flow estimation with motion yet.")
-        regularization_loss = tf.losses.get_regularization_loss()
+        # regularization_loss = tf.losses.get_regularization_loss()
         # final_loss = regularization_loss + tf.exp(-weight_flow) * combined_loss + weight_flow\
         #              + tf.exp(-weight_fw) * fun_loss + tf.exp(-weight_fw_mask) * fw_mask_loss + weight_fw + weight_fw_mask \
         #              #+ tf.exp(-weight_bw) * fun_loss_bw + tf.exp(-weight_bw_mask) * bw_mask_loss + weight_bw + weight_bw_mask
@@ -185,11 +190,11 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     _track_loss(params.get('epipolar_loss_weight') * fun_loss, 'loss/fun')
 
     # Add regularization loss of mask to problem.
-    _track_loss(mask_regularization_loss, 'loss/reg_mask')
     _track_loss(fw_mask_loss, 'loss/reg_mask_fw')
-    _track_loss(weight_fw, 'loss/weight_fw')
-    _track_loss(weight_fw_mask, 'loss/weight_fw_mask')
-    # _track_loss(bw_mask_loss, 'loss/reg_mask_bw')
+    _track_loss(loss_unc[0], 'loss/unc_fw')
+    _track_loss(loss_unc[1], 'loss/unc_fw_mask')
+    _track_loss(loss_unc[2], 'loss/unc_bw')
+    _track_loss(loss_unc[3], 'loss/unc_bw_mask')
 
     _track_loss(final_loss, 'loss/final')
 
@@ -203,7 +208,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # for i, cur_flow in enumerate(flows_fw):
     #     _track_image(flow_to_color(cur_flow), 'flow_{}'.format(i))
     _track_image(flow_to_color(final_flow_fw), 'estimated_flow_fw')
-    _track_image(flow_to_color(final_flow_bw), 'estimated_flow_bw')
+    # _track_image(flow_to_color(final_flow_bw), 'estimated_flow_bw')
 
     im1_pred = image_warp(im2, final_flow_fw)
     _track_image(im1_pred, 'warp_2to1')
