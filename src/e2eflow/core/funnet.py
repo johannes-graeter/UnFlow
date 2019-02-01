@@ -54,3 +54,9 @@ def funnet(flow):
             motion_angles = tf.scalar_mul(pi / 2., motion_angles)
 
             return motion_angles, mask
+
+
+def get_funnet_log_uncertainties(size=5):
+    with tf.variable_scope('funnet'):
+        loss_log_unc = tf.get_variable('log_uncertainties', shape=[size])
+    return loss_log_unc

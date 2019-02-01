@@ -4,7 +4,7 @@ from .augment import random_photometric
 from .downsample import downsample
 from .flow_util import flow_to_color
 from .flownet import flownet, FLOW_SCALE
-from .funnet import funnet
+from .funnet import funnet, get_funnet_log_uncertainties
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp_reg_loss
 from .util import add_to_debug_output, add_to_output, get_inlier_prob_from_mask_logits
@@ -151,20 +151,20 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
     bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=tf.nn.softmax(mask_logits))
 
-    loss_unc = tf.get_variable('loss_uncertainty_weights', shape=[5])
+    funnet_log_unc = get_funnet_log_uncertainties(size=5)
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
         final_loss = regularization_loss \
-                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[0]), fun_loss) \
-                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[1]), fw_mask_loss) \
-                     + tf.scalar_mul(0.5, loss_unc[0]) \
-                     + tf.scalar_mul(0.5, loss_unc[1]) \
-                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[2]), fun_loss_bw) \
-                     + tf.scalar_mul(0.5 * tf.exp(-loss_unc[3]), bw_mask_loss) \
-                     + tf.scalar_mul(0.5, loss_unc[2]) \
-                     + tf.scalar_mul(0.5, loss_unc[3])
+                     + tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[0]), fun_loss) \
+                     + tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[1]), fw_mask_loss) \
+                     + tf.scalar_mul(0.5, funnet_log_unc[0]) \
+                     + tf.scalar_mul(0.5, funnet_log_unc[1]) \
+                     + tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[2]), fun_loss_bw) \
+                     + tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[3]), bw_mask_loss) \
+                     + tf.scalar_mul(0.5, funnet_log_unc[2]) \
+                     + tf.scalar_mul(0.5, funnet_log_unc[3])
 
     else:
         raise Exception("Not implemented flow estimation with motion yet.")
@@ -191,10 +191,10 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Add regularization loss of mask to problem.
     _track_loss(fw_mask_loss, 'loss/reg_mask_fw')
-    _track_loss(loss_unc[0], 'loss/unc_fw')
-    _track_loss(loss_unc[1], 'loss/unc_fw_mask')
-    _track_loss(loss_unc[2], 'loss/unc_bw')
-    _track_loss(loss_unc[3], 'loss/unc_bw_mask')
+    _track_loss(funnet_log_unc[0], 'loss/unc_fw')
+    _track_loss(funnet_log_unc[1], 'loss/unc_fw_mask')
+    _track_loss(funnet_log_unc[2], 'loss/unc_bw')
+    _track_loss(funnet_log_unc[3], 'loss/unc_bw_mask')
 
     _track_loss(final_loss, 'loss/final')
 
