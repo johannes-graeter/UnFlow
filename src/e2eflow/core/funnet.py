@@ -58,5 +58,5 @@ def funnet(flow):
 
 def get_funnet_log_uncertainties(size=5):
     with tf.variable_scope('funnet'):
-        loss_log_unc = tf.get_variable('log_uncertainties', shape=[size])
+        loss_log_unc = tf.get_variable('log_uncertainties', shape=[size], initializer=tf.constant_initializer(0.))
     return loss_log_unc

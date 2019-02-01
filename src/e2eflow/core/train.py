@@ -51,12 +51,8 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
     else:
         # restore_external_nets = finetune if ckpt is None else finetune[:flownet_num - 1]
         restore_external_nets = finetune
-        if params.get('epipolar_loss_weight', 0.) > 0. and not params.get('train_motion_only', False):
-            print('-- save', net_names[-2:])
-            variables_to_save = slim.get_variables_to_restore(include=net_names[-2:])
-        else:
-            print('-- save', net_names[-1])
-            variables_to_save = slim.get_variables_to_restore(include=[net_names[-1]])
+        print('-- save', net_names[-1])
+        variables_to_save = slim.get_variables_to_restore(include=[net_names[-1]])
 
     saver = tf.train.Saver(variables_to_save, max_to_keep=1000)
 
@@ -66,8 +62,7 @@ def restore_networks(sess, params, ckpt, ckpt_path=None):
         print('-- restore', net_names[i], finetune_ckpt.model_checkpoint_path)
 
         nets_to_restore = [net_names[i]]
-        variables_to_restore = slim.get_variables_to_restore(
-            include=nets_to_restore)
+        variables_to_restore = slim.get_variables_to_restore(include=nets_to_restore)
 
         try:
             restorer = tf.train.Saver(variables_to_restore)
