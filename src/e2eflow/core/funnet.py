@@ -5,7 +5,7 @@ from .funnet_architectures import custom_frontend, exp_mask_layers, trunc_normal
 slim = tf.contrib.slim
 
 
-def funnet(flow):
+def funnet(flow, input_mask):
     def frontend(input_flow, scope):
         """Define frontend to use."""
         # return alexnet_v2(input_flow, num_classes=None, spatial_squeeze=False, scope=scope)
@@ -13,12 +13,13 @@ def funnet(flow):
 
     # Auto reuse variables, it only makes sense to have one fun network at the same time, right?
     with tf.variable_scope('funnet', reuse=tf.AUTO_REUSE) as sc:
+        # Concatenate mask to input flow.
+        input = tf.concat((flow, tf.expend_dims(input_mask, axis=3)), axis=3)
         # Frontend
         # Get flow feature map from fully convolutional frontend.
-        conv_activations, end_points = frontend(flow, scope=sc.original_name_scope)
-
+        conv_activations, end_points = frontend(input, scope=sc.original_name_scope)
         # Mask layers
-        mask, end_points_mask = exp_mask_layers(conv_activations, flow, 2, scope=sc.original_name_scope)
+        mask, end_points_mask = exp_mask_layers(conv_activations, input, 2, scope=sc.original_name_scope)
         end_points.update(end_points_mask)
 
         # Backend

@@ -391,7 +391,6 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
 
     return loss
 
-
 def compute_exp_reg_loss(pred, ref=None):
     # Default reference labels are 0,1
     if ref is None:
