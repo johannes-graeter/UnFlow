@@ -173,11 +173,14 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     if params.get('train_motion_only'):
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
         final_loss = regularization_loss
+
+        assert (len(fun_losses) == len(mask_losses))
+        weight = 0.5 / len(fun_losses) / 2.0
         for loss, mask_loss in zip(fun_losses, mask_losses):
-            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[0]), loss[0])
-            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[0]), loss[1])
-            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[1]), mask_loss[0])
-            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[1]), mask_loss[1])
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), loss[0])
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), loss[1])
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), mask_loss[0])
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), mask_loss[1])
         final_loss += tf.scalar_mul(0.5, funnet_log_unc[0])
         final_loss += tf.scalar_mul(0.5, funnet_log_unc[1])
 
