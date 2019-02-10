@@ -7,7 +7,7 @@ from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet, get_funnet_log_uncertainties
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp_reg_loss
-from .util import add_to_debug_output, add_to_output, get_inlier_prob_from_mask_logits, get_reference_explain_mask
+from .util import add_to_output, get_reference_explain_mask
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -19,6 +19,8 @@ def _track_loss(op, name):
 
 def _track_image(op, name, namespace="train"):
     name = namespace + '/' + name
+    if len(op.shape.as_list()) < 4:
+        op = tf.expand_dims(op, axis=3)
     tf.add_to_collection('train_images', tf.identity(op, name=name))
 
 
@@ -160,7 +162,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
         # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
         ref = (tf.nn.softmax(warped_bw_prob) + probs) / 2.
-        ref = tf.reverse(ref, axis=3)  # Reverse last dim.
+        ref = tf.reverse(ref, [3])  # Reverse last dim.
 
         motions.append((motion_angles, motion_angles_bw))
         masks.append((probs, probs_bw))
@@ -176,11 +178,11 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
         assert (len(fun_losses) == len(mask_losses))
         weight = 0.5 / len(fun_losses) / 2.0
-        for loss, mask_loss in zip(fun_losses, mask_losses):
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), loss[0])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), loss[1])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), mask_loss[0])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), mask_loss[1])
+        for l, ml in zip(fun_losses, mask_losses):
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), l[0])
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), l[1])
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), ml[0])
+            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), ml[1])
         final_loss += tf.scalar_mul(0.5, funnet_log_unc[0])
         final_loss += tf.scalar_mul(0.5, funnet_log_unc[1])
 
@@ -195,18 +197,18 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     #  DEBUG
     ##################################
     # Debug
-    for j, motion in enumerate(motions):
+    for j, mo in enumerate(motions):
         for i in range(5):
-            add_to_output('funnet/motion_angles_{}/{}'.format(j, i), motion[0][:, i])
-            add_to_output('funnet/motion_angles_bw_{}/{}'.format(j, i), motion[1][:, i])
+            add_to_output('funnet/motion_angles_{}/{}'.format(j, i), mo[0][:, i])
+            add_to_output('funnet/motion_angles_bw_{}/{}'.format(j, i), mo[1][:, i])
 
-    for i, loss in enumerate(fun_losses):
-        _track_loss('loss/fun_loss_{}'.format(i), loss[0])
-        _track_loss('loss/fun_loss_bw_{}'.format(i), loss[1])
+    for i, l in enumerate(fun_losses):
+        _track_loss(l[0], 'loss/fun_loss_{}'.format(i))
+        _track_loss(l[1], 'loss/fun_loss_bw_{}'.format(i))
 
-    for i, mask in enumerate(masks):
-        _track_image(mask[0][:, :, :, 1], 'mask_full_{}'.format(i), namespace='funnet')
-        _track_image(mask[1][:, :, :, 1], 'mask_full_bw_{}'.format(i), namespace='funnet')
+    for i, m in enumerate(masks):
+        _track_image(m[0][:, :, :, 1], 'mask_full_{}'.format(i), namespace='funnet')
+        _track_image(m[1][:, :, :, 1], 'mask_full_bw_{}'.format(i), namespace='funnet')
 
     _track_loss(regularization_loss, 'loss/reg_nets')
     _track_loss(combined_loss, 'loss/variable_loss')
