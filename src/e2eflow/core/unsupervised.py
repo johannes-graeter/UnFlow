@@ -140,7 +140,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Start with reference mask with ones.
     ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
 
-    for i in range(3):
+    num_objects = 3
+    for i in range(num_objects):
         # Add loss from epipolar geometry for forward pass.
         motion_angles, mask_logits = funnet(flows_fw[0], ref[:, :, :, 1])
         # Convert mask of logits to inlier probability. Upscale for flow weighting. Same method as for upscaling final_flow_fw.
@@ -169,7 +170,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         fun_losses.append((fun_loss, fun_loss_bw))
         mask_losses.append((fw_mask_loss, bw_mask_loss))
 
-    funnet_log_unc = get_funnet_log_uncertainties(size=2)
+    funnet_log_unc = get_funnet_log_uncertainties(size=2 * num_objects)
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
@@ -177,14 +178,14 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         final_loss = regularization_loss
 
         assert (len(fun_losses) == len(mask_losses))
-        weight = 0.5 / len(fun_losses) / 2.0
-        for l, ml in zip(fun_losses, mask_losses):
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), l[0])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), l[1])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), ml[0])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), ml[1])
-        final_loss += tf.scalar_mul(0.5, funnet_log_unc[0])
-        final_loss += tf.scalar_mul(0.5, funnet_log_unc[1])
+        assert (len(fun_losses) == num_objects)
+        for i, (l, ml) in enumerate(zip(fun_losses, mask_losses)):
+            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[2 * i]), l[0])
+            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[2 * i]), l[1])
+            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[2 * i + 1]), ml[0])
+            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[2 * i + 1]), ml[1])
+            final_loss += tf.scalar_mul(0.5, funnet_log_unc[2 * i])
+            final_loss += tf.scalar_mul(0.5, funnet_log_unc[2 * i + 1])
 
     else:
         raise Exception("Not implemented flow estimation with motion yet.")
@@ -217,8 +218,10 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     for i, ml in enumerate(mask_losses):
         _track_loss(ml[0], 'loss/reg_mask_fw_{}'.format(i))
         _track_loss(ml[1], 'loss/reg_mask_bw_{}'.format(i))
-    _track_loss(funnet_log_unc[0], 'loss/unc_fun_loss')
-    _track_loss(funnet_log_unc[1], 'loss/unc_mask')
+
+    for i in range(num_objects):
+        _track_loss(funnet_log_unc[2 * i], 'loss/unc_fun_loss_{}'.format(i))
+        _track_loss(funnet_log_unc[2 * i + 1], 'loss/unc_mask_{}'.format(i))
     _track_loss(final_loss, 'loss/final')
 
     for loss in LOSSES:
