@@ -140,7 +140,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Start with reference mask with ones.
     ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
 
-    num_objects = 3
+    num_objects = 2
     for i in range(num_objects):
         # Add loss from epipolar geometry for forward pass.
         motion_angles, mask_logits = funnet(flows_fw[0], ref[:, :, :, 1])
