@@ -13,6 +13,15 @@ from .util import add_to_output, get_reference_explain_mask
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
 
 
+def update_max_elements(ref, percentage=0.05, value=1.0):
+    fl = tf.contrib.layers.flatten(ref)  # get flattened tensors (batch_size, :)
+    _, length = fl.shape.as_list()
+    thres = tf.nn.top_k(fl, int(percentage * length), sorted=True)[:, -1]
+    mask = tf.greater(ref, thres)
+    ref = tf.where(mask, ref, tf.ones_like(ref) * value)
+    return ref
+
+
 def _track_loss(op, name):
     tf.add_to_collection('losses', tf.identity(op, name=name))
 
@@ -136,9 +145,12 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     masks = []
     fun_losses = []
     mask_losses = []
+    # Debug
+    refs = []
 
     # Start with reference mask with ones.
     ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
+    refs.append(ref)
 
     num_objects = 2
     for i in range(num_objects):
@@ -164,6 +176,9 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
         ref = (tf.nn.softmax(warped_bw_prob) + probs) / 2.
         ref = tf.reverse(ref, [3])  # Reverse last dim.
+
+        ref = update_max_elements(ref, percentage=0.05, value=1.0)
+        refs.append(ref)
 
         motions.append((motion_angles, motion_angles_bw))
         masks.append((probs, probs_bw))
@@ -210,6 +225,9 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     for i, m in enumerate(masks):
         _track_image(m[0][:, :, :, 1], 'mask_full_{}'.format(i), namespace='funnet')
         _track_image(m[1][:, :, :, 1], 'mask_full_bw_{}'.format(i), namespace='funnet')
+
+    for i, r in enumerate(refs):
+        _track_image(r[:, :, :, 1], "ref_{}".format(i), namespace='funnet')
 
     _track_loss(regularization_loss, 'loss/reg_nets')
     _track_loss(combined_loss, 'loss/variable_loss')
