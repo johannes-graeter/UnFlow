@@ -13,18 +13,25 @@ from .util import add_to_output, get_reference_explain_mask
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
 
 
-def update_max_elements(ref, percentage=0.05, dim=1):
+def maybe_update_max_elements(ref, percentage=0.05, dim=1, min_thres=0.3):
     b, h, w, c = ref.shape.as_list()
-
     cur = ref[:, :, :, dim]
+
+    # Get threshold by highest values.
     fl = tf.contrib.layers.flatten(cur)  # get flattened tensors (batch_size, :)
     _, length = fl.shape.as_list()
     thres = tf.nn.top_k(fl, k=int(percentage * length), sorted=True)
     thres = tf.expand_dims(thres.values[:, -1], axis=1)
+
+    # Clip threshold, so that values that are a lot lower will not be updated.
+    thres = tf.clip_by_value(thres, clip_value_min=min_thres, clip_value_max=1.0)
+
+    # Get mask which is true if value is greater than thres.
     gr_mask_stack = tf.reshape(tf.reshape(tf.ones_like(cur), (b, h * w)) * thres, (b, h, w))
     mask = tf.greater(cur, gr_mask_stack)
     mask = tf.stack((mask, mask), axis=3)
 
+    # Update.
     ref = tf.where(mask, get_reference_explain_mask(ref.shape.as_list()), ref)
     return ref
 
@@ -190,7 +197,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         ref = tf.stack((ref[:, :, :, 1], ref[:, :, :, 0]), axis=3)  # Reverse last dim.
 
         # Set a percentage of biggest pixels to 1 inorder to regularize to 1.
-        ref = update_max_elements(ref, percentage=0.1)
+        ref = maybe_update_max_elements(ref, percentage=0.1, min_thres=0.3)
 
     funnet_log_unc = get_funnet_log_uncertainties(size=2 * num_objects)
 
