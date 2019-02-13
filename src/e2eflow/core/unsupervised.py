@@ -13,12 +13,19 @@ from .util import add_to_output, get_reference_explain_mask
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
 
 
-def update_max_elements(ref, percentage=0.05, value=1.0):
-    fl = tf.contrib.layers.flatten(ref)  # get flattened tensors (batch_size, :)
+def update_max_elements(ref, percentage=0.05, dim=1):
+    b, h, w, c = ref.shape.as_list()
+
+    cur = ref[:, :, :, dim]
+    fl = tf.contrib.layers.flatten(cur)  # get flattened tensors (batch_size, :)
     _, length = fl.shape.as_list()
-    thres = tf.nn.top_k(fl, int(percentage * length), sorted=True)[:, -1]
-    mask = tf.greater(ref, thres)
-    ref = tf.where(mask, ref, tf.ones_like(ref) * value)
+    thres = tf.nn.top_k(fl, k=int(percentage * length), sorted=True)
+    thres = tf.expand_dims(thres.values[:, -1], axis=1)
+    gr_mask_stack = tf.reshape(tf.reshape(tf.ones_like(cur), (b, h * w)) * thres, (b, h, w))
+    mask = tf.greater(cur, gr_mask_stack)
+    mask = tf.stack((mask, mask), axis=3)
+
+    ref = tf.where(mask, get_reference_explain_mask(ref.shape.as_list()), ref)
     return ref
 
 
@@ -150,7 +157,6 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Start with reference mask with ones.
     ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
-    refs.append(ref)
 
     num_objects = 2
     for i in range(num_objects):
@@ -170,20 +176,21 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
         # Regularize backward inlier mask to be very similar to forward mask.
-        warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
-        bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=probs)
-
-        # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
-        ref = (tf.nn.softmax(warped_bw_prob) + probs) / 2.
-        ref = tf.reverse(ref, [3])  # Reverse last dim.
-
-        ref = update_max_elements(ref, percentage=0.05, value=1.0)
-        refs.append(ref)
+        warped_bw_logits = image_warp(mask_logits_bw, flows_fw[0])
+        bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_logits, ref=probs)
 
         motions.append((motion_angles, motion_angles_bw))
         masks.append((probs, probs_bw))
         fun_losses.append((fun_loss, fun_loss_bw))
         mask_losses.append((fw_mask_loss, bw_mask_loss))
+        refs.append(ref)
+
+        # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
+        ref = tf.nn.softmax(warped_bw_logits)
+        ref = tf.stack((ref[:, :, :, 1], ref[:, :, :, 0]), axis=3)  # Reverse last dim.
+
+        # Set a percentage of biggest pixels to 1 inorder to regularize to 1.
+        ref = update_max_elements(ref, percentage=0.1)
 
     funnet_log_unc = get_funnet_log_uncertainties(size=2 * num_objects)
 
