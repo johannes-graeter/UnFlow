@@ -233,8 +233,9 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-2]),
                                     global_mask_consistency_loss[0] + global_mask_consistency_loss[1])
 
+        weight_local = 0.01
         # Add loss for local mask constitency -> output resembles input.
-        final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-1]),
+        final_loss += tf.scalar_mul(0.5 * weight_local * tf.exp(-funnet_log_unc[-1]),
                                     local_mask_consistency_loss[0] + local_mask_consistency_loss[1])
 
         # Add regularization for all weights.
