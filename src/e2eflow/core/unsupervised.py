@@ -8,7 +8,7 @@ from .funnet import funnet, get_funnet_log_uncertainties
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp_reg_loss
 from .util import add_to_debug_output, add_to_output, get_inlier_prob_from_mask_logits, get_reference_explain_mask, \
-    calc_essential_matrix_5point, epipolar_errors_squared
+    calc_fundamental_matrix_8point, epipolar_errors_squared
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -253,9 +253,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     ##################################
     #  DEBUG
     ##################################
-    essential_mat = calc_essential_matrix_5point(final_flow_fw, intrin)
-    fundamental_mat = tf.matmul(tf.matmul(tf.matrix_transpose(tf.matrix_inverse(intrin)), essential_mat),
-                                tf.matrix_inverse(intrin))
+    fundamental_mat = calc_fundamental_matrix_8point(final_flow_fw)
     error_mat = tf.reshape(epipolar_errors_squared(fundamental_mat, final_flow_fw), final_flow_fw.shape.as_list())
     _track_image(error_mat, 'error_mat_5point', namespace="funnet")
 

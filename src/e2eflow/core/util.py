@@ -243,6 +243,104 @@ def calc_essential_matrix_5point(flow, intrinsics):
 
     return E
 
+
+def normalize_feature_points(old_points, new_points):
+    # shift origins to centroids
+    cpu = 0.
+    cpv = 0.
+    ccu = 0.
+    ccv = 0.
+    for old_p, new_p in zip(old_points, new_points):
+        cpu += old_p[0]
+        cpv += old_p[1]
+        ccu += new_p[0]
+        ccv += new_p[1]
+
+    l = old_points.shape.as_list()[1]
+    cpu /= l
+    cpv /= l
+    ccu /= l
+    ccv /= l
+
+    old_points[:, :, 0] -= cpu
+    old_points[:, :, 1] -= cpv
+    new_points[:, :, 0] -= ccu
+    new_points[:, :, 1] -= ccv
+
+    # scale features such that mean distance from origin is sqrt(2)
+    sp = tf.reduce_sum(tf.sqrt(tf.square(old_points[:, :, 0]) + tf.square(old_points[:, :, 1])))
+    sc = tf.reduce_sum(tf.sqrt(tf.square(new_points[:, :, 0]) + tf.square(new_points[:, :, 1])))
+
+    # if (fabs(sp)<1e-10 || fabs(sc)<1e-10)
+    #  return false;
+    sp = tf.sqrt(2.0) * l / sp
+    sc = tf.sqrt(2.0) * l / sc
+
+    old_points[:, :, :2] *= sp
+    new_points[:, :, :2] *= sc
+    # compute corresponding transformation matrices
+    Tp = tf.constant([[sp, 0., -sp * cpu], [0., sp, -sp * cpv], [0., 0., 1.]])
+    Tc = tf.constant([[sc, 0., -sc * ccu], [0., sc, -sc * ccv], [0., 0., 1.]])
+    return old_points, new_points, Tp, Tc
+
+
+def epipolar_squared_errors_to_prob(error_vec):
+    error_vec=tf.divide(tf.ones_like(error_vec), tf.sqrt(error_vec))
+    tf.divide(error_vec,tf.reduce_sum(error_vec, axis=1))
+    return error_vec
+
+
+def calc_fundamental_matrix_8point(flow):
+    def fundamental_matrix(old_points, new_points, weights)
+
+        Ksqrt = tf.matrix_diag(tf.sqrt(weights))
+
+        l = old_points.shape.as_list()[1]
+
+        # create constraint matrix A
+        A = tf.zeros((l, 9))
+        for i, (old_p, new_p) in enumerate(zip(old_points, new_points)):
+            A[i][0] = new_p[0] * old_p[0]
+            A[i][1] = new_p[0] * old_p[1]
+            A[i][2] = new_p[0]
+            A[i][3] = new_p[1] * old_p[0]
+            A[i][4] = new_p[1] * old_p[1]
+            A[i][5] = new_p[1]
+            A[i][6] = old_p[0]
+            A[i][7] = old_p[1]
+            A[i][8] = 1.
+
+        # compute singular value decomposition of A
+        U, W, V = tf.linalg.svd(tf.matmul(Ksqrt,A))
+
+        # extract fundamental matrix from the column of V corresponding to the smallest singular value
+        F = tf.reshape(V[:, -1](3, 3))
+
+        # enforce rank 2
+        U, W, V = tf.linalg.svd(F)
+        W[2][0] = 0
+        F = tf.matmul(tf.matmul(U, tf.diag(W)), tf.matrx_transpose(V))
+        return F
+
+    old_points, new_points = get_correspondences(flow)
+
+    old_points, new_points, Tp, Tc = normalize_feature_points(old_points, new_points)
+
+    weights = tf.ones(old_points.shape.as_list()[:2])
+    weights = tf.expand_dims(weights, axis=2)
+
+    F = tf.zeros(3)
+    number_iterations = 10
+    for i in range(number_iterations):
+        F = fundamental_matrix(old_points, new_points, weights)
+        # denormalize
+        F = tf.matmul(tf.matmul(tf.matrix_transpose(Tc), F), Tp);
+        # update weights
+        weights = epipolar_squared_errors_to_prob(epipolar_errors_squared(F, flow))
+
+    return F
+
+
 def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=None, *, normalize=True, debug=False):
     """
     return: a tensor with shape (num_batchs, height*width) with the squared epipolar errors of the flow given the
