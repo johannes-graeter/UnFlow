@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import cv2
 
 
 def to_intrinsics(f, cu, cv):
@@ -217,6 +218,31 @@ def get_image_coordinates_as_points(shape):
     return uv1_vec
 
 
+def get_correspondences(flow):
+    batch_size, flow_h, flow_w, two = flow.shape.as_list()
+    assert (two == 2)
+
+    # Get image point coordinates as flow vector in homogenous coordinates.
+    old_points = get_image_coordinates_as_points((batch_size, flow_h, flow_w))
+    old_points = tf.transpose(old_points, (0, 2, 1))
+
+    # Add calculated flow to images coordinates to get new flow.
+    flow_vec = tf.reshape(flow, (batch_size, flow_h * flow_w, two))
+    flow_vec = tf.transpose(flow_vec, (0, 2, 1))
+    flow_vec = tf.concat((flow_vec, tf.zeros((batch_size, 1, flow_h * flow_w))), axis=1)
+    new_points = old_points + flow_vec
+
+    return old_points, new_points
+
+
+def calc_essential_matrix_5point(flow, intrinsics):
+    f = intrinsics[0][0]
+    pp = (intrinsics[0][2], intrinsics[1][2])
+    old_points, new_points = get_correspondences(flow)
+    E = cv2.findEssentialMat(old_points, new_points, focal=f, pp=pp, method="MEDS")
+
+    return E
+
 def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=None, *, normalize=True, debug=False):
     """
     return: a tensor with shape (num_batchs, height*width) with the squared epipolar errors of the flow given the
@@ -235,19 +261,7 @@ def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=No
     else:
         raise Exception("Invalid number of dimensions.")
 
-    flow_bs, flow_h, flow_w, two = flow.shape.as_list()
-    assert (two == 2)
-    assert (flow_bs == batch_size)
-
-    # Get image point coordinates as flow vector in homogenous coordinates.
-    old_points = get_image_coordinates_as_points((batch_size, flow_h, flow_w))
-    old_points = tf.transpose(old_points, (0, 2, 1))
-
-    # Add calculated flow to images coordinates to get new flow.
-    flow_vec = tf.reshape(flow, (batch_size, flow_h * flow_w, two))
-    flow_vec = tf.transpose(flow_vec, (0, 2, 1))
-    flow_vec = tf.concat((flow_vec, tf.zeros((batch_size, 1, flow_h * flow_w))), axis=1)
-    new_points = old_points + flow_vec
+    old_points, new_points = get_correspondences(flow)
 
     # if bin_size > 0:
     #     us = [i * bin_size for i in range(int(flow_h * flow_w / bin_size))]
@@ -279,6 +293,7 @@ def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=No
         error_vec = tf.divide(error_vec, norm_fact)
 
     if mask_weights is not None:
+        _, flow_h, flow_w, _ = flow.shape.as_list()
         # Do weighting with mask.
         # Get weights as vector with shape (batch_size, height*width)
         assert (len(mask_weights.shape.as_list()) == 3)
