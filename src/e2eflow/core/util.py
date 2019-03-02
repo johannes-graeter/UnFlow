@@ -250,13 +250,14 @@ def normalize_feature_points(old_points, new_points):
     cpv = 0.
     ccu = 0.
     ccv = 0.
-    for old_p, new_p in zip(old_points, new_points):
-        cpu += old_p[0]
-        cpv += old_p[1]
-        ccu += new_p[0]
-        ccv += new_p[1]
-
     l = old_points.shape.as_list()[1]
+
+    for i in range(l):
+        cpu += old_p[:, i, 0]
+        cpv += old_p[:, i, 1]
+        ccu += new_p[:, i, 0]
+        ccv += new_p[:, i, 1]
+
     cpu /= l
     cpv /= l
     ccu /= l
@@ -285,41 +286,43 @@ def normalize_feature_points(old_points, new_points):
 
 
 def epipolar_squared_errors_to_prob(error_vec):
-    error_vec=tf.divide(tf.ones_like(error_vec), tf.sqrt(error_vec))
-    tf.divide(error_vec,tf.reduce_sum(error_vec, axis=1))
+    error_vec = tf.divide(tf.ones_like(error_vec), tf.sqrt(error_vec))
+    tf.divide(error_vec, tf.reduce_sum(error_vec, axis=1))
     return error_vec
 
 
 def calc_fundamental_matrix_8point(flow):
-    def fundamental_matrix(old_points, new_points, weights)
+    def fundamental_matrix(old_points, new_points, weights):
 
         Ksqrt = tf.matrix_diag(tf.sqrt(weights))
 
+        bs = old_points.shape.as_list()[0]
         l = old_points.shape.as_list()[1]
 
         # create constraint matrix A
-        A = tf.zeros((l, 9))
-        for i, (old_p, new_p) in enumerate(zip(old_points, new_points)):
-            A[i][0] = new_p[0] * old_p[0]
-            A[i][1] = new_p[0] * old_p[1]
-            A[i][2] = new_p[0]
-            A[i][3] = new_p[1] * old_p[0]
-            A[i][4] = new_p[1] * old_p[1]
-            A[i][5] = new_p[1]
-            A[i][6] = old_p[0]
-            A[i][7] = old_p[1]
-            A[i][8] = 1.
+        A = tf.zeros((bs, l, 9))
+        for j in range(bs):
+            for i in range(l):
+                A[j, i, 1] = new_points[j, i, 0] * old_points[j, i, 1]
+                A[j, i, 2] = new_points[j, i, 0]
+                A[j, i, 3] = new_points[j, i, 1] * old_points[j, i, 0]
+                A[j, i, 0] = new_points[j, i, 0] * old_points[j, i, 0]
+                A[j, i, 4] = new_points[j, i, 1] * old_points[j, i, 1]
+                A[j, i, 5] = new_points[j, i, 1]
+                A[j, i, 6] = old_points[j, i, 0]
+                A[j, i, 7] = old_points[j, i, 1]
+                A[j, i, 8] = 1.
 
         # compute singular value decomposition of A
-        U, W, V = tf.linalg.svd(tf.matmul(Ksqrt,A))
+        U, W, V = tf.linalg.svd(tf.matmul(Ksqrt, A))
 
         # extract fundamental matrix from the column of V corresponding to the smallest singular value
-        F = tf.reshape(V[:, -1](3, 3))
+        F = tf.reshape(V[:,, -1](3, 3))
 
         # enforce rank 2
         U, W, V = tf.linalg.svd(F)
-        W[2][0] = 0
-        F = tf.matmul(tf.matmul(U, tf.diag(W)), tf.matrx_transpose(V))
+        W[:, 2, 0] = tf.zeros_like(W[:, 2, 0])
+        F = tf.matmul(tf.matmul(U, tf.diag(W)), tf.matrix_transpose(V))
         return F
 
     old_points, new_points = get_correspondences(flow)
