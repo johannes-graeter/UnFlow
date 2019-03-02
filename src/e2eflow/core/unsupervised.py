@@ -14,12 +14,37 @@ from .util import add_to_debug_output, add_to_output, get_inlier_prob_from_mask_
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
 
 
+def maybe_update_max_elements(ref, percentage=0.05, dim=1, min_thres=0.3):
+    b, h, w, c = ref.shape.as_list()
+    cur = ref[:, :, :, dim]
+
+    # Get threshold by highest values.
+    fl = tf.contrib.layers.flatten(cur)  # get flattened tensors (batch_size, :)
+    _, length = fl.shape.as_list()
+    thres = tf.nn.top_k(fl, k=int(percentage * length), sorted=True)
+    thres = tf.expand_dims(thres.values[:, -1], axis=1)
+
+    # Clip threshold, so that values that are a lot lower will not be updated.
+    thres = tf.clip_by_value(thres, clip_value_min=min_thres, clip_value_max=1.0)
+
+    # Get mask which is true if value is greater than thres.
+    gr_mask_stack = tf.reshape(tf.reshape(tf.ones_like(cur), (b, h * w)) * thres, (b, h, w))
+    mask = tf.greater(cur, gr_mask_stack)
+    mask = tf.stack((mask, mask), axis=3)
+
+    # Update.
+    ref = tf.where(mask, get_reference_explain_mask(ref.shape.as_list()), ref)
+    return ref
+
+
 def _track_loss(op, name):
     tf.add_to_collection('losses', tf.identity(op, name=name))
 
 
 def _track_image(op, name, namespace="train"):
     name = namespace + '/' + name
+    if len(op.shape.as_list()) < 4:
+        op = tf.expand_dims(op, axis=3)
     tf.add_to_collection('train_images', tf.identity(op, name=name))
 
 
@@ -134,12 +159,16 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     motions = []
     masks = []
     fun_losses = []
-    mask_losses = []
+    mask_consistency_losses = []
+
+    # Debug
+    refs = []
 
     # Start with reference mask with ones.
     ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
 
-    for i in range(3):
+    num_objects = 2
+    for i in range(num_objects):
         # Add loss from epipolar geometry for forward pass.
         motion_angles, mask_logits = funnet(flows_fw[0], ref[:, :, :, 1])
         # Convert mask of logits to inlier probability. Upscale for flow weighting. Same method as for upscaling final_flow_fw.
@@ -156,34 +185,63 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         fun_loss_bw = funnet_loss(motion_angles_bw, final_flow_bw, inlier_probs_bw_full_res, intrin)
 
         # Regularize backward inlier mask to be very similar to forward mask.
-        warped_bw_prob = image_warp(mask_logits_bw, flows_fw[0])
-        bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_prob, ref=probs)
-
-        # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
-        ref = (tf.nn.softmax(warped_bw_prob) + probs) / 2.
-        ref = tf.reverse(ref, axis=3)  # Reverse last dim.
+        warped_bw_logits = image_warp(mask_logits_bw, flows_fw[0])
+        bw_mask_loss = compute_exp_reg_loss(pred=warped_bw_logits, ref=probs)
 
         motions.append((motion_angles, motion_angles_bw))
         masks.append((probs, probs_bw))
         fun_losses.append((fun_loss, fun_loss_bw))
-        mask_losses.append((fw_mask_loss, bw_mask_loss))
+        mask_consistency_losses.append((fw_mask_loss, bw_mask_loss))
+        refs.append(ref)
 
-    funnet_log_unc = get_funnet_log_uncertainties(size=2)
+        # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
+        ref = tf.nn.softmax(warped_bw_logits)
+        ref = tf.stack((ref[:, :, :, 1], ref[:, :, :, 0]), axis=3)  # Reverse last dim.
+
+        # Set a percentage of biggest pixels to 1 inorder to regularize to 1.
+        ref = maybe_update_max_elements(ref, percentage=0.05, min_thres=0.3)
+
+    # All mask probabilities accumulated must give for each pixel
+    # Accumulate masks
+    accumulated_mask_fw = tf.zeros_like(ref[:, :, :, 1])
+    accumulated_mask_bw = tf.zeros_like(ref[:, :, :, 1])
+    for mask_fw, mask_bw in masks:
+        accumulated_mask_fw = accumulated_mask_fw + mask_fw[:, :, :, 1]
+        accumulated_mask_bw = accumulated_mask_bw + mask_bw[:, :, :, 1]
+    # Mean squared difference to 1. is loss.
+    global_mask_consistency_loss = (tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_fw) - accumulated_mask_fw)),
+                                    tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_bw) - accumulated_mask_bw)))
+
+    # Add up all local mask consistency losses
+    local_mask_consistency_loss = [0., 0.]
+    for ml in mask_consistency_losses:
+        local_mask_consistency_loss[0] += ml[0]
+        local_mask_consistency_loss[1] += ml[1]
+
+    funnet_log_unc = get_funnet_log_uncertainties(size=num_objects + 2)
 
     # Add losses from funnet to problem.
     if params.get('train_motion_only'):
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
         final_loss = regularization_loss
 
-        assert (len(fun_losses) == len(mask_losses))
-        weight = 0.5 / len(fun_losses) / 2.0
-        for loss, mask_loss in zip(fun_losses, mask_losses):
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), loss[0])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[0]), loss[1])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), mask_loss[0])
-            final_loss += tf.scalar_mul(weight * tf.exp(-funnet_log_unc[1]), mask_loss[1])
-        final_loss += tf.scalar_mul(0.5, funnet_log_unc[0])
-        final_loss += tf.scalar_mul(0.5, funnet_log_unc[1])
+        assert (len(fun_losses) == num_objects)
+        # Add loss for motion.
+        for i, l in enumerate(fun_losses):
+            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[i]), l[0] + l[1])
+
+        # Add loss for global mask consistency -> all probabilities add up to one.
+        final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-2]),
+                                    global_mask_consistency_loss[0] + global_mask_consistency_loss[1])
+
+        weight_local = 0.01
+        # Add loss for local mask constitency -> output resembles input.
+        final_loss += tf.scalar_mul(0.5 * weight_local * tf.exp(-funnet_log_unc[-1]),
+                                    local_mask_consistency_loss[0] + local_mask_consistency_loss[1])
+
+        # Add regularization for all weights.
+        for i in range(funnet_log_unc.shape.as_list()[0]):
+            final_loss += tf.scalar_mul(0.5, funnet_log_unc[i])
 
     else:
         raise Exception("Not implemented flow estimation with motion yet.")
@@ -202,28 +260,35 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     _track_image(error_mat, 'error_mat_5point', namespace="funnet")
 
     # Debug
-    for j, motion in enumerate(motions):
+    for j, mo in enumerate(motions):
         for i in range(5):
-            add_to_output('funnet/motion_angles_{}/{}'.format(j, i), motion[0][:, i])
-            add_to_output('funnet/motion_angles_bw_{}/{}'.format(j, i), motion[1][:, i])
+            add_to_output('funnet/motion_angles_{}/{}'.format(j, i), mo[0][:, i])
+            add_to_output('funnet/motion_angles_bw_{}/{}'.format(j, i), mo[1][:, i])
 
-    for i, loss in enumerate(fun_losses):
-        _track_loss('loss/fun_loss_{}'.format(i), loss[0])
-        _track_loss('loss/fun_loss_bw_{}'.format(i), loss[1])
+    for i, l in enumerate(fun_losses):
+        _track_loss(l[0], 'loss/fun_loss_{}'.format(i))
+        _track_loss(l[1], 'loss/fun_loss_bw_{}'.format(i))
 
-    for i, mask in enumerate(masks):
-        _track_image(mask[0][:, :, :, 1], 'mask_full_{}'.format(i), namespace='funnet')
-        _track_image(mask[1][:, :, :, 1], 'mask_full_bw_{}'.format(i), namespace='funnet')
+    for i, m in enumerate(masks):
+        _track_image(m[0][:, :, :, 1], 'mask_full_{}'.format(i), namespace='funnet')
+        _track_image(m[1][:, :, :, 1], 'mask_full_bw_{}'.format(i), namespace='funnet')
+
+    for i, r in enumerate(refs):
+        _track_image(r[:, :, :, 1], "ref_{}".format(i), namespace='funnet')
 
     _track_loss(regularization_loss, 'loss/reg_nets')
     _track_loss(combined_loss, 'loss/variable_loss')
 
     # Add regularization loss of mask to problem.
-    for i, ml in enumerate(mask_losses):
-        _track_loss(ml[0], 'loss/reg_mask_fw_{}'.format(i))
-        _track_loss(ml[1], 'loss/reg_mask_bw_{}'.format(i))
-    _track_loss(funnet_log_unc[0], 'loss/unc_fun_loss')
-    _track_loss(funnet_log_unc[1], 'loss/unc_mask')
+    _track_loss(global_mask_consistency_loss[0], 'loss/reg_global_mask_fw')
+    _track_loss(global_mask_consistency_loss[1], 'loss/reg_global_mask_bw')
+    _track_loss(local_mask_consistency_loss[0], 'loss/reg_local_mask_fw')
+    _track_loss(local_mask_consistency_loss[1], 'loss/reg_local_mask_bw')
+
+    for i in range(num_objects):
+        _track_loss(funnet_log_unc[i], 'loss/unc_fun_loss_{}'.format(i))
+    _track_loss(funnet_log_unc[-2], 'loss/unc_mask_global')
+    _track_loss(funnet_log_unc[-1], 'loss/unc_mask_local')
     _track_loss(final_loss, 'loss/final')
 
     for loss in LOSSES:
