@@ -245,43 +245,40 @@ def calc_essential_matrix_5point(flow, intrinsics):
 
 
 def normalize_feature_points(old_points, new_points):
-    # shift origins to centroids
-    cpu = 0.
-    cpv = 0.
-    ccu = 0.
-    ccv = 0.
-    l = old_points.shape.as_list()[1]
+    bs, _ , l = old_points.shape.as_list()
+    print(old_points.shape.as_list(), new_points.shape.as_list())
 
-    for i in range(l):
-        cpu += old_p[:, i, 0]
-        cpv += old_p[:, i, 1]
-        ccu += new_p[:, i, 0]
-        ccv += new_p[:, i, 1]
+    # shift origins to centroids
+    cpu = tf.reduce_sum(old_points[:, 0, :], axis=1, keepdims=True)
+    cpv = tf.reduce_sum(old_points[:, 1, :], axis=1, keepdims=True)
+    ccu = tf.reduce_sum(new_points[:, 0, :], axis=1, keepdims=True)
+    ccv = tf.reduce_sum(new_points[:, 1, :], axis=1, keepdims=True)
 
     cpu /= l
     cpv /= l
     ccu /= l
     ccv /= l
 
-    old_points[:, :, 0] -= cpu
-    old_points[:, :, 1] -= cpv
-    new_points[:, :, 0] -= ccu
-    new_points[:, :, 1] -= ccv
+    old_points = old_points - tf.stack((cpu,cpv,tf.zeros_like(cpu)), axis=1)
+    new_points = new_points - tf.stack((ccu,ccv,tf.zeros_like(ccu)), axis=1)
 
     # scale features such that mean distance from origin is sqrt(2)
-    sp = tf.reduce_sum(tf.sqrt(tf.square(old_points[:, :, 0]) + tf.square(old_points[:, :, 1])))
-    sc = tf.reduce_sum(tf.sqrt(tf.square(new_points[:, :, 0]) + tf.square(new_points[:, :, 1])))
+    sp = tf.reduce_sum(tf.sqrt(tf.square(old_points[:, 0, :]) + tf.square(old_points[:, 1, :])), axis=1, keepdims=True)
+    sc = tf.reduce_sum(tf.sqrt(tf.square(new_points[:, 0, :]) + tf.square(new_points[:, 1, :])), axis=1, keepdims=True)
 
     # if (fabs(sp)<1e-10 || fabs(sc)<1e-10)
     #  return false;
     sp = tf.sqrt(2.0) * l / sp
     sc = tf.sqrt(2.0) * l / sc
 
-    old_points[:, :, :2] *= sp
-    new_points[:, :, :2] *= sc
+    old_points = tf.multiply(old_points, tf.stack((sp,sp,tf.ones_like(sp)),axis=1))
+    new_points = tf.multiply(new_points, tf.stack((sc,sc,tf.ones_like(sc)),axis=1))
     # compute corresponding transformation matrices
-    Tp = tf.constant([[sp, 0., -sp * cpu], [0., sp, -sp * cpv], [0., 0., 1.]])
-    Tc = tf.constant([[sc, 0., -sc * ccu], [0., sc, -sc * ccv], [0., 0., 1.]])
+    print(sp.shape.as_list(), cpu.shape.as_list())
+    Tp = tf.squeeze(tf.concat([tf.expand_dims(tf.stack([sp, tf.zeros_like(sp), -sp * cpu], axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sp), sp, -sp * cpv],axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sp),tf.zeros_like(sp), tf.ones_like(sp)],axis=1),axis=1)], axis=1), axis=3)
+    Tc = tf.squeeze(tf.concat([tf.expand_dims(tf.stack([sc,tf.zeros_like(sc), -sc * ccu], axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sc), sc, -sc * ccv], axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sp),tf.zeros_like(sp), tf.ones_like(sp)],axis=1), axis=1)], axis=1), axis=3)
+
+    print(Tp.shape.as_list(), Tc.shape.as_list())
     return old_points, new_points, Tp, Tc
 
 
@@ -297,27 +294,17 @@ def calc_fundamental_matrix_8point(flow):
         Ksqrt = tf.matrix_diag(tf.sqrt(weights))
 
         bs = old_points.shape.as_list()[0]
-        l = old_points.shape.as_list()[1]
+        l = old_points.shape.as_list()[2]
 
         # create constraint matrix A
-        A = tf.zeros((bs, l, 9))
-        for j in range(bs):
-            for i in range(l):
-                A[j, i, 1] = new_points[j, i, 0] * old_points[j, i, 1]
-                A[j, i, 2] = new_points[j, i, 0]
-                A[j, i, 3] = new_points[j, i, 1] * old_points[j, i, 0]
-                A[j, i, 0] = new_points[j, i, 0] * old_points[j, i, 0]
-                A[j, i, 4] = new_points[j, i, 1] * old_points[j, i, 1]
-                A[j, i, 5] = new_points[j, i, 1]
-                A[j, i, 6] = old_points[j, i, 0]
-                A[j, i, 7] = old_points[j, i, 1]
-                A[j, i, 8] = 1.
+        A=tf.stack((new_points[:, 0, :] * old_points[:, 0, :], new_points[:, 0, :] * old_points[:, 1, :], new_points[:, 0, :], new_points[:, 1, :] * old_points[:, 0, :], new_points[:, 1, :] * old_points[:, 1, :], new_points[:, 1, :], old_points[:, 0, :], old_points[:, 1, :], tf.ones_like(old_points[:,0,:])), axis=2)
 
         # compute singular value decomposition of A
         U, W, V = tf.linalg.svd(tf.matmul(Ksqrt, A))
 
         # extract fundamental matrix from the column of V corresponding to the smallest singular value
-        F = tf.reshape(V[:,, -1](3, 3))
+        assert(V.shape.as_list()[1]==9)
+        F = tf.reshape(V[:, :, -1], (-1, 3, 3))
 
         # enforce rank 2
         U, W, V = tf.linalg.svd(F)
@@ -329,8 +316,7 @@ def calc_fundamental_matrix_8point(flow):
 
     old_points, new_points, Tp, Tc = normalize_feature_points(old_points, new_points)
 
-    weights = tf.ones(old_points.shape.as_list()[:2])
-    weights = tf.expand_dims(weights, axis=2)
+    weights = tf.ones_like(old_points)[:,0,:]
 
     F = tf.zeros(3)
     number_iterations = 10
