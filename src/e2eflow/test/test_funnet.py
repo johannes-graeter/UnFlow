@@ -7,6 +7,7 @@ import tensorflow as tf
 # from .funnet import FunNet
 from ..core.util import epipolar_errors_squared
 from ..core.util import get_fundamental_matrix as get_fun_tf
+from ..core.util import calc_fundamental_matrix_8point
 
 
 def get_rotation(angle, axis=0):
@@ -79,14 +80,23 @@ class TestEpipolarError(unittest.TestCase):
         errs0 = epipolar_errors_squared(f0, flow_tf, normalize=False)
         errs1 = epipolar_errors_squared(f0, flow_tf)
 
+        # Test 8 point
+        F_8p = calc_fundamental_matrix_8point(flow_tf)
+        errs2 = epipolar_errors_squared(F_8p, flow_tf)
+
+        F_test = get_fundamental_matrix(get_rotation(-1. / 180. * np.pi, axis=1), -translation, self.intrin)
         with tf.Session() as sess:
             a = tf.reduce_sum(errs0).eval()
             a1 = tf.reduce_sum(errs1).eval()
+            a2 = tf.reduce_sum(errs2).eval()
+            f_8p=F_8p.eval()
+            print(a2)
 
         self.assertEqual(len(errs0.shape.as_list()), 2)
         self.assertEqual(errs0.shape.as_list()[1], 5 * 5)
         self.assertLess(a, 1e-16)
         self.assertLess(a1, 1e-10)
+        self.assertLess(a2, 1e-10)
         self.assertLess(a, a1)
 
     def test_fundamental_matrix(self):

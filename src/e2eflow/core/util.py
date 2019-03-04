@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
-import cv2
+
+
+# import cv2
 
 
 def to_intrinsics(f, cu, cv):
@@ -91,15 +93,13 @@ def get_fundamental_matrix(angles, intrin):
     :param intrin: matrix with intrinsics as constant with shape (batch_size,3,3)
     :return: fundamental matrices, shape (batch_size,3,3)
     """
-    batch_size, five = angles.shape.as_list()
-
     t, rotation = get_translation_rotation(angles)
 
     # Get cross matrix
     cross_t = get_cross_mat(t)
 
     # Calculate Essential Matrix as in multiple view geometry p.257
-    # should have hape (batch_size,3,3)
+    # should have shape (batch_size,3,3)
     E = tf.matmul(cross_t, rotation)
 
     # Calculate Fundamtenal matrix
@@ -245,7 +245,7 @@ def calc_essential_matrix_5point(flow, intrinsics):
 
 
 def normalize_feature_points(old_points, new_points):
-    bs, _ , l = old_points.shape.as_list()
+    bs, _, l = old_points.shape.as_list()
     print(old_points.shape.as_list(), new_points.shape.as_list())
 
     # shift origins to centroids
@@ -259,8 +259,8 @@ def normalize_feature_points(old_points, new_points):
     ccu /= l
     ccv /= l
 
-    old_points = old_points - tf.stack((cpu,cpv,tf.zeros_like(cpu)), axis=1)
-    new_points = new_points - tf.stack((ccu,ccv,tf.zeros_like(ccu)), axis=1)
+    old_points = old_points - tf.stack((cpu, cpv, tf.zeros_like(cpu)), axis=1)
+    new_points = new_points - tf.stack((ccu, ccv, tf.zeros_like(ccu)), axis=1)
 
     # scale features such that mean distance from origin is sqrt(2)
     sp = tf.reduce_sum(tf.sqrt(tf.square(old_points[:, 0, :]) + tf.square(old_points[:, 1, :])), axis=1, keepdims=True)
@@ -271,61 +271,77 @@ def normalize_feature_points(old_points, new_points):
     sp = tf.sqrt(2.0) * l / sp
     sc = tf.sqrt(2.0) * l / sc
 
-    old_points = tf.multiply(old_points, tf.stack((sp,sp,tf.ones_like(sp)),axis=1))
-    new_points = tf.multiply(new_points, tf.stack((sc,sc,tf.ones_like(sc)),axis=1))
+    old_points = tf.multiply(old_points, tf.stack((sp, sp, tf.ones_like(sp)), axis=1))
+    new_points = tf.multiply(new_points, tf.stack((sc, sc, tf.ones_like(sc)), axis=1))
     # compute corresponding transformation matrices
     print(sp.shape.as_list(), cpu.shape.as_list())
-    Tp = tf.squeeze(tf.concat([tf.expand_dims(tf.stack([sp, tf.zeros_like(sp), -sp * cpu], axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sp), sp, -sp * cpv],axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sp),tf.zeros_like(sp), tf.ones_like(sp)],axis=1),axis=1)], axis=1), axis=3)
-    Tc = tf.squeeze(tf.concat([tf.expand_dims(tf.stack([sc,tf.zeros_like(sc), -sc * ccu], axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sc), sc, -sc * ccv], axis=1), axis=1), tf.expand_dims(tf.stack([tf.zeros_like(sp),tf.zeros_like(sp), tf.ones_like(sp)],axis=1), axis=1)], axis=1), axis=3)
+    Tp = tf.squeeze(tf.concat([tf.expand_dims(tf.stack([sp, tf.zeros_like(sp), -sp * cpu], axis=1), axis=1),
+                               tf.expand_dims(tf.stack([tf.zeros_like(sp), sp, -sp * cpv], axis=1), axis=1),
+                               tf.expand_dims(
+                                   tf.stack([tf.zeros_like(sp), tf.zeros_like(sp), tf.ones_like(sp)], axis=1), axis=1)],
+                              axis=1), axis=3)
+    Tc = tf.squeeze(tf.concat([tf.expand_dims(tf.stack([sc, tf.zeros_like(sc), -sc * ccu], axis=1), axis=1),
+                               tf.expand_dims(tf.stack([tf.zeros_like(sc), sc, -sc * ccv], axis=1), axis=1),
+                               tf.expand_dims(
+                                   tf.stack([tf.zeros_like(sp), tf.zeros_like(sp), tf.ones_like(sp)], axis=1), axis=1)],
+                              axis=1), axis=3)
 
     print(Tp.shape.as_list(), Tc.shape.as_list())
     return old_points, new_points, Tp, Tc
 
 
 def epipolar_squared_errors_to_prob(error_vec):
-    error_vec = tf.divide(tf.ones_like(error_vec), tf.sqrt(error_vec))
-    tf.divide(error_vec, tf.reduce_sum(error_vec, axis=1))
+    error_vec = tf.divide(tf.ones_like(error_vec),
+                          tf.clip_by_value(tf.sqrt(error_vec), clip_value_min=1e-20, clip_value_max=1e200))
+    norm = tf.reduce_sum(error_vec, axis=1)
+    error_vec = tf.divide(error_vec, norm)
     return error_vec
 
 
 def calc_fundamental_matrix_8point(flow):
     def fundamental_matrix(old_points, new_points, weights):
-
         Ksqrt = tf.matrix_diag(tf.sqrt(weights))
 
         bs = old_points.shape.as_list()[0]
         l = old_points.shape.as_list()[2]
 
         # create constraint matrix A
-        A=tf.stack((new_points[:, 0, :] * old_points[:, 0, :], new_points[:, 0, :] * old_points[:, 1, :], new_points[:, 0, :], new_points[:, 1, :] * old_points[:, 0, :], new_points[:, 1, :] * old_points[:, 1, :], new_points[:, 1, :], old_points[:, 0, :], old_points[:, 1, :], tf.ones_like(old_points[:,0,:])), axis=2)
+        A = tf.stack((new_points[:, 0, :] * old_points[:, 0, :], new_points[:, 0, :] * old_points[:, 1, :],
+                      new_points[:, 0, :], new_points[:, 1, :] * old_points[:, 0, :],
+                      new_points[:, 1, :] * old_points[:, 1, :], new_points[:, 1, :], old_points[:, 0, :],
+                      old_points[:, 1, :], tf.ones_like(old_points[:, 0, :])), axis=2)
 
         # compute singular value decomposition of A
-        U, W, V = tf.linalg.svd(tf.matmul(Ksqrt, A))
+        singular_vals, U, V = tf.linalg.svd(tf.matmul(Ksqrt, A))
 
         # extract fundamental matrix from the column of V corresponding to the smallest singular value
-        assert(V.shape.as_list()[1]==9)
+        assert (V.shape.as_list()[1] == 9)
         F = tf.reshape(V[:, :, -1], (-1, 3, 3))
 
         # enforce rank 2
-        U, W, V = tf.linalg.svd(F)
-        W[:, 2, 0] = tf.zeros_like(W[:, 2, 0])
-        F = tf.matmul(tf.matmul(U, tf.diag(W)), tf.matrix_transpose(V))
+        singular_vals, U, V = tf.linalg.svd(F)
+        singular_vals = tf.concat((singular_vals[:, :-1], tf.zeros((singular_vals.shape.as_list()[0], 1))), axis=1)
+        F = tf.matmul(tf.matmul(U, tf.matrix_diag(singular_vals)), tf.matrix_transpose(V))
         return F
 
     old_points, new_points = get_correspondences(flow)
 
     old_points, new_points, Tp, Tc = normalize_feature_points(old_points, new_points)
 
-    weights = tf.ones_like(old_points)[:,0,:]
+    weights = tf.ones_like(old_points)[:, 0, :]
 
-    F = tf.zeros(3)
-    number_iterations = 10
+    F = None
+    number_iterations = 5
     for i in range(number_iterations):
         F = fundamental_matrix(old_points, new_points, weights)
         # denormalize
-        F = tf.matmul(tf.matmul(tf.matrix_transpose(Tc), F), Tp);
+        F = tf.matmul(tf.matmul(tf.matrix_transpose(Tc), F), Tp)
+
         # update weights
         weights = epipolar_squared_errors_to_prob(epipolar_errors_squared(F, flow))
+        with tf.Session() as sess:
+            print("F", F.eval())
+            #print("weights", weights.eval())
 
     return F
 

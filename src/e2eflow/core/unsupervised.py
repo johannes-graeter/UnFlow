@@ -255,7 +255,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     ##################################
     fundamental_mat = calc_fundamental_matrix_8point(final_flow_fw)
     print(fundamental_mat)
-    error_mat = tf.reshape(epipolar_errors_squared(fundamental_mat, final_flow_fw), final_flow_fw.shape.as_list())
+    error_mat = tf.reshaxpe(epipolar_errors_squared(fundamental_mat, final_flow_fw), final_flow_fw.shape.as_list())
     print(error_mat)
     _track_image(error_mat, 'error_mat_5point', namespace="funnet")
 
