@@ -1,8 +1,6 @@
+import cv2
 import numpy as np
 import tensorflow as tf
-
-
-# import cv2
 
 
 def to_intrinsics(f, cu, cv):
@@ -171,9 +169,7 @@ def reform_hartley(flow):
 #
 #     batch_size, height, width = predict_fundamental_matrix.shape.as_list()
 #     # Translate in matrix hartley style (A*f=err), so I don't have to reshape and save 1 multiplication.
-#     print("before reform")
 #     A = reform_hartley(flow)
-#     print("after reform")
 #     if not (height == 9 and width == 1):
 #         raise Exception("Wrong in put dimensions height={} width={}".format(height, width))
 #
@@ -213,6 +209,8 @@ def get_image_coordinates_as_points(shape):
     v = tf.expand_dims(v, axis=3)
 
     uv1 = tf.stack((u, v, tf.ones_like(u)), axis=3)
+    uv1 = tf.cast(uv1, dtype=tf.float32)
+
     uv1_vec = tf.reshape(uv1, (shape[0], shape[1] * shape[2], 3))
 
     return uv1_vec
@@ -222,7 +220,7 @@ def get_correspondences(flow):
     batch_size, flow_h, flow_w, two = flow.shape.as_list()
     assert (two == 2)
 
-    # Get image point coordinates as flow vector in homogenous coordinates.
+    # Get image point coordinates as flow vector in homogeneous coordinates.
     old_points = get_image_coordinates_as_points((batch_size, flow_h, flow_w))
     old_points = tf.transpose(old_points, (0, 2, 1))
 
@@ -246,7 +244,6 @@ def calc_essential_matrix_5point(flow, intrinsics):
 
 def normalize_feature_points(old_points, new_points):
     bs, _, l = old_points.shape.as_list()
-    print(old_points.shape.as_list(), new_points.shape.as_list())
 
     # shift origins to centroids
     cpu = tf.reduce_sum(old_points[:, 0, :], axis=1, keepdims=True)
@@ -274,7 +271,6 @@ def normalize_feature_points(old_points, new_points):
     old_points = tf.multiply(old_points, tf.stack((sp, sp, tf.ones_like(sp)), axis=1))
     new_points = tf.multiply(new_points, tf.stack((sc, sc, tf.ones_like(sc)), axis=1))
     # compute corresponding transformation matrices
-    print(sp.shape.as_list(), cpu.shape.as_list())
     Tp = tf.squeeze(tf.concat([tf.expand_dims(tf.stack([sp, tf.zeros_like(sp), -sp * cpu], axis=1), axis=1),
                                tf.expand_dims(tf.stack([tf.zeros_like(sp), sp, -sp * cpv], axis=1), axis=1),
                                tf.expand_dims(
@@ -286,22 +282,25 @@ def normalize_feature_points(old_points, new_points):
                                    tf.stack([tf.zeros_like(sp), tf.zeros_like(sp), tf.ones_like(sp)], axis=1), axis=1)],
                               axis=1), axis=3)
 
-    print(Tp.shape.as_list(), Tc.shape.as_list())
+    old_points = tf.cast(old_points, dtype=tf.float32)
+    new_points = tf.cast(new_points, dtype=tf.float32)
+    Tp = tf.cast(Tp, dtype=tf.float32)
+    Tc = tf.cast(Tc, dtype=tf.float32)
+
     return old_points, new_points, Tp, Tc
 
 
 def epipolar_squared_errors_to_prob(error_vec):
-    error_vec = tf.divide(tf.ones_like(error_vec),
-                          tf.clip_by_value(tf.sqrt(error_vec), clip_value_min=1e-20, clip_value_max=1e200))
-    norm = tf.reduce_sum(error_vec, axis=1, keepdims=True)
+    error_vec = tf.reduce_max(error_vec, axis=1, keepdims=True) - tf.sqrt(
+        tf.clip_by_value(error_vec, clip_value_min=1e-100, clip_value_max=1e100))
+    norm = tf.clip_by_value(tf.reduce_sum(error_vec, axis=1, keepdims=True), clip_value_min=1e-100,
+                            clip_value_max=1e100)
     error_vec = tf.divide(error_vec, norm)
     return error_vec
 
 
-def calc_fundamental_matrix_8point(flow):
+def calc_fundamental_matrix_8point(flow, inlier_prob=None, number_iterations=10):
     def fundamental_matrix(old_points, new_points, weights):
-        Ksqrt = tf.matrix_diag(tf.sqrt(weights))
-
         bs = old_points.shape.as_list()[0]
         l = old_points.shape.as_list()[2]
 
@@ -311,8 +310,9 @@ def calc_fundamental_matrix_8point(flow):
                       new_points[:, 1, :] * old_points[:, 1, :], new_points[:, 1, :], old_points[:, 0, :],
                       old_points[:, 1, :], tf.ones_like(old_points[:, 0, :])), axis=2)
 
+        A_weighted = tf.multiply(A, weights)
         # compute singular value decomposition of A
-        singular_vals, U, V = tf.linalg.svd(tf.matmul(Ksqrt, A))
+        singular_vals, _, V = tf.linalg.svd(A_weighted)
 
         # extract fundamental matrix from the column of V corresponding to the smallest singular value
         assert (V.shape.as_list()[1] == 9)
@@ -328,10 +328,14 @@ def calc_fundamental_matrix_8point(flow):
 
     old_points, new_points, Tp, Tc = normalize_feature_points(old_points, new_points)
 
-    weights = tf.ones_like(old_points)[:, 0, :]
-
     F = None
-    number_iterations = 5
+
+    if inlier_prob is None:
+        weights = tf.expand_dims(tf.ones_like(old_points)[:, 0, :], axis=2)
+    else:
+        weights = tf.reshape(inlier_prob,
+                             (flow.shape.as_list()[0], flow.shape.as_list()[1] * flow.shape.as_list()[2], 1))
+
     for i in range(number_iterations):
         F = fundamental_matrix(old_points, new_points, weights)
         # denormalize
@@ -339,11 +343,20 @@ def calc_fundamental_matrix_8point(flow):
 
         # update weights
         weights = epipolar_squared_errors_to_prob(epipolar_errors_squared(F, flow))
-        with tf.Session() as sess:
-            print("F", F.eval())
-            #print("weights", weights.eval())
+        weights = tf.expand_dims(weights, axis=2)
 
     return F
+
+
+def get_mask_fundamental_mat(flow, inlier_probs=None):
+    fundamental_mat = calc_fundamental_matrix_8point(flow, inlier_probs)
+
+    error_mat = tf.reshape(epipolar_squared_errors_to_prob(epipolar_errors_squared(fundamental_mat, flow)),
+                           flow.shape.as_list()[:3])
+    error_mat = error_mat - tf.reduce_min(error_mat)
+    error_mat = tf.div_no_nan(error_mat, tf.reduce_max(error_mat))
+
+    return tf.stack((1. - error_mat, error_mat), axis=3)
 
 
 def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=None, *, normalize=True, debug=False):
@@ -365,11 +378,6 @@ def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=No
         raise Exception("Invalid number of dimensions.")
 
     old_points, new_points = get_correspondences(flow)
-
-    # if bin_size > 0:
-    #     us = [i * bin_size for i in range(int(flow_h * flow_w / bin_size))]
-    #     old_points = tf.gather(old_points, us, axis=1)
-    #     new_points = tf.gather(new_points, us, axis=1)
 
     # Calculate epipolar error.
     Fx = tf.matmul(pred_fun, old_points)  # needed for normalization

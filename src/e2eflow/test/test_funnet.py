@@ -4,10 +4,11 @@ import numpy as np
 # from matplotlib import pyplot as plt
 import tensorflow as tf
 
+from ..core.util import calc_fundamental_matrix_8point
 # from .funnet import FunNet
 from ..core.util import epipolar_errors_squared
+from ..core.util import get_correspondences
 from ..core.util import get_fundamental_matrix as get_fun_tf
-from ..core.util import calc_fundamental_matrix_8point
 
 
 def get_rotation(angle, axis=0):
@@ -70,7 +71,7 @@ class TestEpipolarError(unittest.TestCase):
         rotation = get_rotation(1. / 180. * np.pi, axis=1)
         translation = np.array([0., 0., 2.])
         flow = get_test_flow(5, 5, rotation, translation, self.intrin)
-        flow_tf = tf.expand_dims(tf.convert_to_tensor(flow, np.float32), axis=0)
+        flow_tf = tf.expand_dims(tf.convert_to_tensor(flow, tf.float32), axis=0)
 
         F = get_fundamental_matrix(rotation, translation, self.intrin)
         # f must have shape (num_batches, 9, 1)
@@ -84,19 +85,40 @@ class TestEpipolarError(unittest.TestCase):
         F_8p = calc_fundamental_matrix_8point(flow_tf)
         errs2 = epipolar_errors_squared(F_8p, flow_tf)
 
+        # compare with opencv
+        import cv2
+        points1_tf, points2_tf = get_correspondences(flow_tf)
+
+        with tf.Session() as sess:
+            points1 = points1_tf.eval()
+            points2 = points2_tf.eval()
+        points1 = np.transpose(np.squeeze(points1))
+        points2 = np.transpose(np.squeeze(points2))
+
+        F_cv, inliers = cv2.findFundamentalMat(points1, points2, method=cv2.FM_LMEDS)
+        f_cv_tf = tf.expand_dims(tf.convert_to_tensor(F_cv.reshape(1, 9), np.float32), axis=2)
+
+        errs3 = epipolar_errors_squared(f_cv_tf, flow_tf)
+
         F_test = get_fundamental_matrix(get_rotation(-1. / 180. * np.pi, axis=1), -translation, self.intrin)
         with tf.Session() as sess:
             a = tf.reduce_sum(errs0).eval()
             a1 = tf.reduce_sum(errs1).eval()
             a2 = tf.reduce_sum(errs2).eval()
-            f_8p=F_8p.eval()
-            print(a2)
+            a3 = tf.reduce_sum(errs3).eval()
+            f_8p = np.squeeze(F_8p.eval())
+
+            d = np.matmul(np.transpose(f_8p), F_cv) - np.eye(3)
+            print(np.linalg.norm(d))
+
+            print(a, a1, a2, a3)
 
         self.assertEqual(len(errs0.shape.as_list()), 2)
         self.assertEqual(errs0.shape.as_list()[1], 5 * 5)
         self.assertLess(a, 1e-16)
         self.assertLess(a1, 1e-10)
-        self.assertLess(a2, 1e-10)
+        self.assertLess(a2, 1e-9)
+        self.assertLess(a3, 1e-10)
         self.assertLess(a, a1)
 
     def test_fundamental_matrix(self):

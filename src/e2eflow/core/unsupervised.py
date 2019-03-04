@@ -7,8 +7,8 @@ from .flownet import flownet, FLOW_SCALE
 from .funnet import funnet, get_funnet_log_uncertainties
 from .image_warp import image_warp
 from .losses import compute_losses, create_border_mask, funnet_loss, compute_exp_reg_loss
-from .util import add_to_debug_output, add_to_output, get_inlier_prob_from_mask_logits, get_reference_explain_mask, \
-    calc_fundamental_matrix_8point, epipolar_errors_squared
+from .util import add_to_output, get_reference_explain_mask, \
+    get_mask_fundamental_mat
 
 # REGISTER ALL POSSIBLE LOSS TERMS
 LOSSES = ['occ', 'sym', 'fb', 'grad', 'ternary', 'photo', 'smooth_1st', 'smooth_2nd']
@@ -41,10 +41,16 @@ def _track_loss(op, name):
     tf.add_to_collection('losses', tf.identity(op, name=name))
 
 
-def _track_image(op, name, namespace="train"):
+def _track_image(op, name, namespace="train", normalize=False):
     name = namespace + '/' + name
+
+    if normalize:
+        op = op - tf.reduce_min(op)
+        op = tf.div_no_nan(op, tf.reduce_max(op))
+
     if len(op.shape.as_list()) < 4:
         op = tf.expand_dims(op, axis=3)
+
     tf.add_to_collection('train_images', tf.identity(op, name=name))
 
 
@@ -165,7 +171,9 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     refs = []
 
     # Start with reference mask with ones.
-    ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
+    # ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
+    ref = get_mask_fundamental_mat(final_flow_fw)
+    ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
 
     num_objects = 2
     for i in range(num_objects):
@@ -196,7 +204,13 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
         # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
         ref = tf.nn.softmax(warped_bw_logits)
-        ref = tf.stack((ref[:, :, :, 1], ref[:, :, :, 0]), axis=3)  # Reverse last dim.
+        # Reverse last dim to make outliers inliers.
+        ref = tf.stack((ref[:, :, :, 1], ref[:, :, :, 0]), axis=3)
+        # Recalculate mask with epipolar constraint.
+        ref_rescale = tf.image.resize_bilinear(tf.expand_dims(ref[:, :, :, 1], axis=3), im_shape)
+        print(final_flow_fw.shape.as_list(), ref_rescale.shape.as_list())
+        ref = get_mask_fundamental_mat(final_flow_fw, ref_rescale)
+        ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
 
         # Set a percentage of biggest pixels to 1 inorder to regularize to 1.
         ref = maybe_update_max_elements(ref, percentage=0.05, min_thres=0.3)
@@ -253,12 +267,6 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     ##################################
     #  DEBUG
     ##################################
-    fundamental_mat = calc_fundamental_matrix_8point(final_flow_fw)
-    print(fundamental_mat)
-    error_mat = tf.reshaxpe(epipolar_errors_squared(fundamental_mat, final_flow_fw), final_flow_fw.shape.as_list())
-    print(error_mat)
-    _track_image(error_mat, 'error_mat_5point', namespace="funnet")
-
     # Debug
     for j, mo in enumerate(motions):
         for i in range(5):
