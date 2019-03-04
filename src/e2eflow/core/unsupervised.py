@@ -172,7 +172,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Start with reference mask with ones.
     # ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
-    ref = get_mask_fundamental_mat(final_flow_fw)
+    inlier_thres = 1e-8
+    ref = get_mask_fundamental_mat(final_flow_fw, inlier_thres=inlier_thres)
     ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
 
     num_objects = 2
@@ -208,12 +209,11 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         ref = tf.stack((ref[:, :, :, 1], ref[:, :, :, 0]), axis=3)
         # Recalculate mask with epipolar constraint.
         ref_rescale = tf.image.resize_bilinear(tf.expand_dims(ref[:, :, :, 1], axis=3), im_shape)
-        print(final_flow_fw.shape.as_list(), ref_rescale.shape.as_list())
-        ref = get_mask_fundamental_mat(final_flow_fw, ref_rescale)
+        ref = get_mask_fundamental_mat(final_flow_fw, inlier_thres=inlier_thres, inlier_probs=ref_rescale)
         ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
 
         # Set a percentage of biggest pixels to 1 inorder to regularize to 1.
-        ref = maybe_update_max_elements(ref, percentage=0.05, min_thres=0.3)
+        # ref = maybe_update_max_elements(ref, percentage=0.05, min_thres=0.3)
 
     # All mask probabilities accumulated must give for each pixel
     # Accumulate masks

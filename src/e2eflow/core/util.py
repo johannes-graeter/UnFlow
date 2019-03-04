@@ -348,15 +348,29 @@ def calc_fundamental_matrix_8point(flow, inlier_prob=None, number_iterations=10)
     return F
 
 
-def get_mask_fundamental_mat(flow, inlier_probs=None):
+def threshold(x, thres):
+    cond = tf.less(x, tf.scalar_mul(thres, tf.ones(tf.shape(x))))
+    out = tf.where(cond, tf.zeros(tf.shape(x)), tf.ones(tf.shape(x)))
+    return out
+
+
+def get_mask_fundamental_mat(flow, inlier_thres=1e-8, inlier_probs=None):
     fundamental_mat = calc_fundamental_matrix_8point(flow, inlier_probs)
 
-    error_mat = tf.reshape(epipolar_squared_errors_to_prob(epipolar_errors_squared(fundamental_mat, flow)),
-                           flow.shape.as_list()[:3])
-    error_mat = error_mat - tf.reduce_min(error_mat)
-    error_mat = tf.div_no_nan(error_mat, tf.reduce_max(error_mat))
 
-    return tf.stack((1. - error_mat, error_mat), axis=3)
+def get_mask_fundamental_mat(flow, inlier_thres=None, inlier_probs=None):
+    fundamental_mat = calc_fundamental_matrix_8point(flow, inlier_probs)
+
+    if inlier_thres is not None:
+        new_inlier_probs = tf.reshape(epipolar_errors_squared(fundamental_mat, flow), flow.shape.as_list()[:3])
+        new_inlier_probs = 1. - threshold(tf.sqrt(new_inlier_probs), inlier_thres)
+    else:
+        new_inlier_probs = tf.reshape(epipolar_squared_errors_to_prob(epipolar_errors_squared(fundamental_mat, flow)),
+                                      flow.shape.as_list()[:3])
+        new_inlier_probs = new_inlier_probs - tf.reduce_min(new_inlier_probs)
+        new_inlier_probs = tf.div_no_nan(new_inlier_probs, tf.reduce_max(new_inlier_probs))
+
+    return tf.stack((1. - new_inlier_probs, new_inlier_probs), axis=3)
 
 
 def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=None, *, normalize=True, debug=False):
