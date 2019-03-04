@@ -293,7 +293,7 @@ def normalize_feature_points(old_points, new_points):
 def epipolar_squared_errors_to_prob(error_vec):
     error_vec = tf.divide(tf.ones_like(error_vec),
                           tf.clip_by_value(tf.sqrt(error_vec), clip_value_min=1e-20, clip_value_max=1e200))
-    norm = tf.reduce_sum(error_vec, axis=1)
+    norm = tf.reduce_sum(error_vec, axis=1, keepdims=True)
     error_vec = tf.divide(error_vec, norm)
     return error_vec
 
