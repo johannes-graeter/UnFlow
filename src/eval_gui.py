@@ -91,11 +91,7 @@ def write_flo(flow, filename):
     f.close()
 
 
-def evaluate_experiment(name, input_fn, data_input, do_resize=True):
-    normalize_fn = data_input._normalize_image
-    resized_h = data_input.dims[0]
-    resized_w = data_input.dims[1]
-
+def get_checkpoint(name):
     current_config = config_dict('../config.ini')
     exp_dir = os.path.join(current_config['dirs']['log'], 'ex', name)
     config_path = os.path.join(exp_dir, 'config.ini')
@@ -113,6 +109,16 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
     if not ckpt:
         raise RuntimeError("Error: experiment must contain a checkpoint")
     ckpt_path = exp_dir + "/" + os.path.basename(ckpt.model_checkpoint_path)
+
+    return config_path, params, config, ckpt, ckpt_path
+
+
+def evaluate_experiment(name, input_fn, data_input, do_resize=True):
+    normalize_fn = data_input._normalize_image
+    resized_h = data_input.dims[0]
+    resized_w = data_input.dims[1]
+
+    config_path, params, config, ckpt, ckpt_path = get_checkpoint(name)
 
     with tf.Graph().as_default():  # , tf.device('gpu:' + FLAGS.gpu):
         inputs = input_fn()
@@ -135,11 +141,10 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
             im2 = resize_output(im2, height, width, 3)
             flow = resize_output_flow(flow, height, width, 2)
             flow_bw = resize_output_flow(flow_bw, height, width, 2)
-            inlier_prob_mask = resize_output(inlier_prob_mask, height, width, 1)
+            inlier_prob_mask = resize_output(inlier_prob_mask, height, width)
 
         # Stack inlier prob_mask 3 times
-        inlier_prob_mask_stacked = tf.concat((inlier_prob_mask, inlier_prob_mask, inlier_prob_mask), axis=3)
-
+        inlier_prob_mask_stacked = inlier_prob_mask
         flow_fw_int16 = flow_to_int16(flow)
         flow_bw_int16 = flow_to_int16(flow_bw)
 
@@ -304,6 +309,92 @@ def evaluate_experiment(name, input_fn, data_input, do_resize=True):
     for t, avg in zip(scalar_slots, averages):
         _, scalar_name = t
         print("({}) {} = {}".format(name, scalar_name, avg))
+
+    return image_lists, image_names, flows, motion_angles
+
+
+def evaluate_experiment2(name, input_fn, data_input):
+    config_path, params, config, ckpt, ckpt_path = get_checkpoint(name)
+
+    with tf.Graph().as_default():  # , tf.device('gpu:' + FLAGS.gpu):
+        inputs = input_fn()
+        im1, im2, input_shape, intrinsics = inputs[:4]
+        truth = inputs[4:]
+
+        height, width, _ = tf.unstack(tf.squeeze(input_shape), num=3, axis=0)
+
+        _, flow, flow_bw, motion_angles_tf, inlier_prob_mask = unsupervised_loss(
+            (im1, im2, input_shape, intrinsics),
+            normalization=data_input.get_normalization(),
+            params=params, augment_photometric=False, return_flow=True)
+
+        inlier_prob_mask_stacked = tf.concat((inlier_prob_mask, inlier_prob_mask, inlier_prob_mask), axis=3)
+
+        flow_fw_int16 = flow_to_int16(flow)
+        flow_bw_int16 = flow_to_int16(flow_bw)
+
+        im1_pred = image_warp(im2, flow)
+        im1_diff = tf.abs(im1 - im1_pred)
+
+        image_slots = [(im1 / 255, 'first image'),
+                       (im1_diff / 255, 'warp error'),
+                       (flow_to_color(flow), 'flow prediction'),
+                       (inlier_prob_mask_stacked[0], 'inlier_prob')]
+
+        num_ims = len(image_slots)
+        image_ops = [t[0] for t in image_slots]
+        image_names = [t[1] for t in image_slots]
+
+        image_lists = []
+        sess_config = tf.ConfigProto(allow_soft_placement=True)
+
+        exp_out_dir = os.path.join('../out', name)
+
+        with tf.Session(config=sess_config) as sess:
+            saver = tf.train.Saver(tf.global_variables())
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.local_variables_initializer())
+
+            restore_networks(sess, params, ckpt, ckpt_path)
+
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(sess=sess,
+                                                   coord=coord)
+
+            # TODO adjust for batch_size > 1 (also need to change image_lists appending)
+            max_iter = FLAGS.num if FLAGS.num > 0 else None
+
+            # JG: return flow
+            flows = []
+            motion_angles = []
+            try:
+                num_iters = 0
+                while not coord.should_stop() and (max_iter is None or num_iters != max_iter):
+                    all_results = sess.run(
+                        [flow, flow_bw, flow_fw_int16, flow_bw_int16, motion_angles_tf] + image_ops)
+                    # JG: get flow
+                    flows.append(all_results[0])
+                    # JG: get motion
+                    motion_angles.append(all_results[4])
+
+                    # flow_fw_res, flow_bw_res, flow_fw_int16_res, flow_bw_int16_res = all_results[:4]
+                    all_results = all_results[5:]
+                    image_results = all_results[:num_ims]
+                    if num_iters < FLAGS.num_vis:
+                        image_lists.append(image_results)
+                    if num_iters > 0:
+                        sys.stdout.write('\r')
+                    num_iters += 1
+                    sys.stdout.write("-- evaluating '{}': {}/{}"
+                                     .format(name, num_iters, max_iter))
+                    sys.stdout.flush()
+                    print()
+            except tf.errors.OutOfRangeError as exc:
+                print(exc.message)
+                pass
+
+            coord.request_stop()
+            coord.join(threads)
 
     return image_lists, image_names, flows, motion_angles
 

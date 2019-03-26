@@ -22,7 +22,7 @@ def resize_output_crop(t, height, width, channels):
     return tf.reshape(t, [1, height, width, channels])
 
 
-def resize_output(t, height, width, channels):
+def resize_output(t, height, width, channels=None):
     return tf.image.resize_bilinear(t, [height, width])
 
 

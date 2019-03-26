@@ -222,6 +222,7 @@ def get_keypoints(image, feature_params):
 
 
 def add_flow_to_display(imgs, flows, params):
+    print(imgs.shape)
     first_imgs = imgs[:, -2, 0, :, :]  # im1 for whole sequence
     points = get_keypoints(first_imgs[0, :, :, :], params['feature_params'])
     tracked_points = track_points(flows, points)
@@ -258,27 +259,39 @@ def main(argv=None):
         return input_fn0(augment_crop=False, center_crop=True, seed=None, swap_images=False, shift=shift)
 
     results = []
+    motion_dim = 1
+    fw_bw = 0
+
     for n, name in enumerate(FLAGS.ex.split(',')):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
         # Motion angles are roll, pitch,yaw, translation_yaw, translation ptich from current image to last image
-        display_images, image_names, flows, motion_angles = eval_gui.evaluate_experiment(name, input_fn, data_input,
-                                                                                         do_resize=False)
+        display_images_out, image_names, flows, motion_angles = eval_gui.evaluate_experiment(name, input_fn, data_input,
+                                                                                             do_resize=False)
         flows = np.squeeze(np.array(flows), axis=1)
 
-        # Add ones for motion plotting and convert to numpy
+        display_images = []
+        for l in display_images_out:
+            prob_mask = l[3][motion_dim][fw_bw][:, :, :, 1]  # First object forward flow.
+            display_images.append([l[0], l[1], l[2], np.stack((prob_mask, prob_mask, prob_mask), axis=3)])
+
+        # Add empty image for motion plotting
         for l in display_images:
             l.append(np.ones_like(l[0]))
+
+        # Convert to numpy
         imgs = np.array(display_images, copy=False, subok=True)
 
-        # Draw image with tracked features.
-        params = {
-            'feature_params': dict(maxCorners=1000, qualityLevel=0.3, minDistance=10, blockSize=7),
-            'resample_rate': 10}
-        imgs = add_flow_to_display(imgs, flows, params)
-        image_names[-1] = "tracklets"
+        # # Draw image with tracked features.
+        # params = {
+        #     'feature_params': dict(maxCorners=1000, qualityLevel=0.3, minDistance=10, blockSize=7),
+        #     'resample_rate': 10}
+        # imgs = add_flow_to_display(imgs, flows, params)
+        # image_names[-1] = "tracklets"
 
         # Accumulate and draw motion
+        for i in range(len(motion_angles)):
+            motion_angles[i] = motion_angles[i][motion_dim][fw_bw]
         motion_angles = np.squeeze(np.array(motion_angles), axis=1)
 
         # motion is from current to last, so direction of translation is negative.

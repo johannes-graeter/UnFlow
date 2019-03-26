@@ -276,6 +276,11 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         #              + tf.exp(-weight_fw) * fun_loss + tf.exp(-weight_fw_mask) * fw_mask_loss + weight_fw + weight_fw_mask \
         #              #+ tf.exp(-weight_bw) * fun_loss_bw + tf.exp(-weight_bw_mask) * bw_mask_loss + weight_bw + weight_bw_mask
 
+    masks_out = []
+    for m in masks:
+        masks_out.append([tf.image.resize_bilinear(m[0][:, :, :, :], im_shape),
+                         tf.image.resize_bilinear(m[1][:, :, :, :], im_shape)])
+
     ##################################
     #  DEBUG
     ##################################
@@ -330,4 +335,4 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     if not return_flow:
         return final_loss
 
-    return final_loss, final_flow_fw, final_flow_bw, motions, masks
+    return final_loss, final_flow_fw, final_flow_bw, motions, masks_out
