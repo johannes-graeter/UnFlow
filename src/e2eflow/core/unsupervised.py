@@ -172,9 +172,12 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     # Start with reference mask with ones.
     # ref = get_reference_explain_mask(flows_fw[0].shape.as_list())
-    inlier_thres = 1e-8
-    ref = get_mask_fundamental_mat(final_flow_fw, inlier_thres=inlier_thres)
-    ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
+    # inlier_thres = 0.6  # For full size image.
+    # inlier_thres = 0.03
+    inlier_thres = 0.001
+    ref = get_mask_fundamental_mat(flows_fw[0], inlier_thres=inlier_thres, number_iterations=50)
+    # ref = get_mask_fundamental_mat(final_flow_fw, inlier_thres=inlier_thres, number_iterations=5)
+    # ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
 
     num_objects = 2
     for i in range(num_objects):
@@ -204,13 +207,18 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         refs.append(ref)
 
         # Next reference is mean probability, but inverted (outlier prob beomces object inlier prob)
-        ref = tf.nn.softmax(warped_bw_logits)
+        # ref = tf.nn.softmax(warped_bw_logits)
+
         # Reverse last dim to make outliers inliers.
         ref = tf.stack((ref[:, :, :, 1], ref[:, :, :, 0]), axis=3)
-        # Recalculate mask with epipolar constraint.
-        ref_rescale = tf.image.resize_bilinear(tf.expand_dims(ref[:, :, :, 1], axis=3), im_shape)
-        ref = get_mask_fundamental_mat(final_flow_fw, inlier_thres=inlier_thres, inlier_probs=ref_rescale)
-        ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
+        # # Recalculate mask with epipolar constraint.
+        # ref_rescale = tf.image.resize_bilinear(tf.expand_dims(ref[:, :, :, 1], axis=3), im_shape)
+        #
+        # _track_image(ref_rescale, "/inv_rescale_ref_{}".format(i), namespace="funnet")
+        #
+        # ref = get_mask_fundamental_mat(final_flow_fw, inlier_thres=inlier_thres, inlier_probs=ref_rescale,
+        #                                number_iterations=1)
+        # ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
 
         # Set a percentage of biggest pixels to 1 inorder to regularize to 1.
         # ref = maybe_update_max_elements(ref, percentage=0.05, min_thres=0.3)
@@ -223,14 +231,19 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         accumulated_mask_fw = accumulated_mask_fw + mask_fw[:, :, :, 1]
         accumulated_mask_bw = accumulated_mask_bw + mask_bw[:, :, :, 1]
     # Mean squared difference to 1. is loss.
-    global_mask_consistency_loss = (tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_fw) - accumulated_mask_fw)),
-                                    tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_bw) - accumulated_mask_bw)))
+    weight_global_mask_loss = 10000.
+    global_mask_consistency_loss = (
+        weight_global_mask_loss * tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_fw) - accumulated_mask_fw)),
+        weight_global_mask_loss * tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_bw) - accumulated_mask_bw)))
 
     # Add up all local mask consistency losses
     local_mask_consistency_loss = [0., 0.]
-    for ml in mask_consistency_losses:
-        local_mask_consistency_loss[0] += ml[0]
-        local_mask_consistency_loss[1] += ml[1]
+    # Different weight for static and dynamic, make trainable?
+    obj_weights = [1., 3.]
+    assert (len(obj_weights) == num_objects)
+    for w, (ml_fw, ml_bw) in zip(obj_weights, mask_consistency_losses):
+        local_mask_consistency_loss[0] += w * ml_fw
+        local_mask_consistency_loss[1] += w * ml_bw
 
     funnet_log_unc = get_funnet_log_uncertainties(size=num_objects + 2)
 
@@ -248,9 +261,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-2]),
                                     global_mask_consistency_loss[0] + global_mask_consistency_loss[1])
 
-        weight_local = 0.01
         # Add loss for local mask constitency -> output resembles input.
-        final_loss += tf.scalar_mul(0.5 * weight_local * tf.exp(-funnet_log_unc[-1]),
+        final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-1]),
                                     local_mask_consistency_loss[0] + local_mask_consistency_loss[1])
 
         # Add regularization for all weights.

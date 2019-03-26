@@ -290,20 +290,18 @@ def normalize_feature_points(old_points, new_points):
     return old_points, new_points, Tp, Tc
 
 
-def epipolar_squared_errors_to_prob(error_vec):
-    error_vec = tf.reduce_max(error_vec, axis=1, keepdims=True) - tf.sqrt(
-        tf.clip_by_value(error_vec, clip_value_min=1e-100, clip_value_max=1e100))
-    norm = tf.clip_by_value(tf.reduce_sum(error_vec, axis=1, keepdims=True), clip_value_min=1e-100,
-                            clip_value_max=1e100)
-    error_vec = tf.divide(error_vec, norm)
-    return error_vec
+def epipolar_squared_errors_to_prob(error_vec_squared):
+    error_vec = tf.sqrt(error_vec_squared)
+    error_vec = tf.clip_by_value(tf.reduce_max(error_vec, axis=1, keepdims=True), clip_value_min=1e-28,
+                                 clip_value_max=1e30) - error_vec
+    norm = tf.clip_by_value(tf.reduce_sum(error_vec, axis=1, keepdims=True), clip_value_min=1e-30,
+                            clip_value_max=1e30)
+    prob = tf.divide(error_vec, norm)
+    return prob
 
 
 def calc_fundamental_matrix_8point(flow, inlier_prob=None, number_iterations=10):
     def fundamental_matrix(old_points, new_points, weights):
-        bs = old_points.shape.as_list()[0]
-        l = old_points.shape.as_list()[2]
-
         # create constraint matrix A
         A = tf.stack((new_points[:, 0, :] * old_points[:, 0, :], new_points[:, 0, :] * old_points[:, 1, :],
                       new_points[:, 0, :], new_points[:, 1, :] * old_points[:, 0, :],
@@ -311,6 +309,7 @@ def calc_fundamental_matrix_8point(flow, inlier_prob=None, number_iterations=10)
                       old_points[:, 1, :], tf.ones_like(old_points[:, 0, :])), axis=2)
 
         A_weighted = tf.multiply(A, weights)
+
         # compute singular value decomposition of A
         singular_vals, _, V = tf.linalg.svd(A_weighted)
 
@@ -329,7 +328,6 @@ def calc_fundamental_matrix_8point(flow, inlier_prob=None, number_iterations=10)
     old_points, new_points, Tp, Tc = normalize_feature_points(old_points, new_points)
 
     F = None
-
     if inlier_prob is None:
         weights = tf.expand_dims(tf.ones_like(old_points)[:, 0, :], axis=2)
     else:
@@ -354,21 +352,32 @@ def threshold(x, thres):
     return out
 
 
-def get_mask_fundamental_mat(flow, inlier_thres=1e-8, inlier_probs=None):
-    fundamental_mat = calc_fundamental_matrix_8point(flow, inlier_probs)
+def mask_with_threshold(x, thres):
+    cond = tf.less(x, tf.scalar_mul(thres, tf.ones(tf.shape(x))))
+    out = tf.where(cond, tf.zeros(tf.shape(x)), x)
+    return out
 
 
-def get_mask_fundamental_mat(flow, inlier_thres=None, inlier_probs=None):
-    fundamental_mat = calc_fundamental_matrix_8point(flow, inlier_probs)
+def soft_threshold(x, thres, a=5.):
+    return tf.sigmoid(tf.scalar_mul(a, x - thres))
+
+
+def get_mask_fundamental_mat(flow, inlier_thres=None, inlier_probs=None, number_iterations=5):
+    fundamental_mat = calc_fundamental_matrix_8point(flow, inlier_probs, number_iterations)
+
+    errs_squ = epipolar_errors_squared(fundamental_mat, flow)
+    # assert (inlier_thres is not None)
+    # new_inlier_probs = tf.reshape(1. - soft_threshold(tf.sqrt(errs_squ), inlier_thres), flow.shape.as_list()[:3])
 
     if inlier_thres is not None:
-        new_inlier_probs = tf.reshape(epipolar_errors_squared(fundamental_mat, flow), flow.shape.as_list()[:3])
-        new_inlier_probs = 1. - threshold(tf.sqrt(new_inlier_probs), inlier_thres)
-    else:
-        new_inlier_probs = tf.reshape(epipolar_squared_errors_to_prob(epipolar_errors_squared(fundamental_mat, flow)),
-                                      flow.shape.as_list()[:3])
-        new_inlier_probs = new_inlier_probs - tf.reduce_min(new_inlier_probs)
-        new_inlier_probs = tf.div_no_nan(new_inlier_probs, tf.reduce_max(new_inlier_probs))
+        errs_squ = mask_with_threshold(errs_squ, inlier_thres * inlier_thres)
+    new_inlier_probs = tf.reshape(epipolar_squared_errors_to_prob(errs_squ), flow.shape.as_list()[:3])
+    new_inlier_probs = new_inlier_probs - tf.reduce_min(new_inlier_probs)
+    new_inlier_probs = tf.divide(new_inlier_probs,
+                                 tf.clip_by_value(tf.reduce_max(new_inlier_probs), clip_value_min=1e-30,
+                                                  clip_value_max=1e30))
+    # Use Gamma expansion to make contrast higher.
+    #new_inlier_probs = tf.pow(new_inlier_probs, 4.)
 
     return tf.stack((1. - new_inlier_probs, new_inlier_probs), axis=3)
 
@@ -414,7 +423,7 @@ def epipolar_errors_squared(predict_fundamental_matrix_in, flow, mask_weights=No
         norm_fact = Fx2[:, 0, :] + Fx2[:, 1, :] + Ftxp2[:, 0, :] + Ftxp2[:, 1, :]  # shape (bs, num_pixels)
 
         # don't divide by zero
-        norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-15, clip_value_max=1e30)
+        norm_fact = tf.clip_by_value(norm_fact, clip_value_min=1e-50, clip_value_max=1e50)
         error_vec = tf.divide(error_vec, norm_fact)
 
     if mask_weights is not None:

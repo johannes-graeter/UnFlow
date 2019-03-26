@@ -82,7 +82,8 @@ class TestEpipolarError(unittest.TestCase):
         errs1 = epipolar_errors_squared(f0, flow_tf)
 
         # Test 8 point
-        F_8p = calc_fundamental_matrix_8point(flow_tf)
+        inli_prob = tf.ones_like(flow_tf)[:, :, :, 0]
+        F_8p = calc_fundamental_matrix_8point(flow_tf, inlier_prob=inli_prob, number_iterations=10)
         errs2 = epipolar_errors_squared(F_8p, flow_tf)
 
         # compare with opencv
@@ -117,7 +118,7 @@ class TestEpipolarError(unittest.TestCase):
         self.assertEqual(errs0.shape.as_list()[1], 5 * 5)
         self.assertLess(a, 1e-16)
         self.assertLess(a1, 1e-10)
-        self.assertLess(a2, 1e-9)
+        self.assertLess(a2, 1e-10)
         self.assertLess(a3, 1e-10)
         self.assertLess(a, a1)
 

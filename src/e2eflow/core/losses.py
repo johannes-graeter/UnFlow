@@ -385,11 +385,12 @@ def funnet_loss(motion_angle_prediction, flow, inlier_prob, intrinsics):
 
     # loss = math_ops.reduce_mean(tf.clip_by_value(tf.abs(epipolar_errors(predict_fun, flow)), 0., 100.))
     loss = tf.reduce_sum(epipolar_errors_squared(predict_fun, flow, weights, normalize=True, debug=True))
-    
+
     # Add loss
     tf.losses.add_loss(loss)
 
     return loss
+
 
 def compute_exp_reg_loss(pred, ref=None):
     # Default reference labels are 0,1
@@ -397,6 +398,10 @@ def compute_exp_reg_loss(pred, ref=None):
         b, h, w, c = pred.shape.as_list()
         assert (c == 2)
         ref = get_reference_explain_mask(pred.shape.as_list())
+
+    # Test size of input.
+    assert (pred.shape.as_list()[0] == ref.shape.as_list()[0] and pred.shape.as_list()[1] == ref.shape.as_list()[1] and
+            pred.shape.as_list()[2] == ref.shape.as_list()[2])
 
     # Loss is cross entropy loss to reference.
     # Probably version two is not needed.
