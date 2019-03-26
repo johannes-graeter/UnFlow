@@ -235,7 +235,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         accumulated_mask_fw = accumulated_mask_fw + mask_fw[:, :, :, 1]
         accumulated_mask_bw = accumulated_mask_bw + mask_bw[:, :, :, 1]
     # Mean squared difference to 1. is loss.
-    weight_global_mask_loss = 10000.
+    weight_global_mask_loss = 1000.
     global_mask_consistency_loss = (
         weight_global_mask_loss * tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_fw) - accumulated_mask_fw)),
         weight_global_mask_loss * tf.reduce_mean(tf.square(tf.ones_like(accumulated_mask_bw) - accumulated_mask_bw)))
@@ -243,7 +243,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Add up all local mask consistency losses
     local_mask_consistency_loss = [0., 0.]
     # Different weight for static and dynamic, make trainable?
-    obj_weights = [1., 3.]
+    obj_weights = [10., 30.]
     assert (len(obj_weights) == num_objects)
     for w, (ml_fw, ml_bw) in zip(obj_weights, mask_consistency_losses):
         local_mask_consistency_loss[0] += w * ml_fw

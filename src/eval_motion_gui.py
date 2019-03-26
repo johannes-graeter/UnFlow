@@ -232,6 +232,24 @@ def add_flow_to_display(imgs, flows, params):
     return imgs
 
 
+def dump(dir, data_names, motions):
+    data, names = data_names
+    try:
+        os.mkdir(dir)
+    except:
+        pass
+
+    for i, (images, motion) in enumerate(zip(data, motions)):
+        np.savetxt(dir + "/motion_{}.txt".format(i), motions[i])
+        for img, n in zip(images, names):
+            dirname = dir + "/" + n
+            try:
+                os.mkdir(dirname)
+            except:
+                pass
+            cv2.imwrite("{}/{}.png".format(dirname, i), images)
+
+
 def main(argv=None):
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
@@ -253,7 +271,8 @@ def main(argv=None):
     input_fn0 = getattr(data_input, 'input_raw')
     shift = np.random.randint(0, 1e6)  # get different set of images each call
     print("shift by {} images".format(shift))
-    shift = 215441
+
+    # shift = 215441
 
     def input_fn():
         return input_fn0(augment_crop=False, center_crop=True, seed=None, swap_images=False, shift=shift)
@@ -262,6 +281,7 @@ def main(argv=None):
     motion_dim = 1
     fw_bw = 0
 
+    motions = []
     for n, name in enumerate(FLAGS.ex.split(',')):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
@@ -294,6 +314,9 @@ def main(argv=None):
             motion_angles[i] = motion_angles[i][motion_dim][fw_bw]
         motion_angles = np.squeeze(np.array(motion_angles), axis=1)
 
+        # save for dump
+        motions.append(motion_angles)
+
         # motion is from current to last, so direction of translation is negative.
         scales = np.ones((motion_angles.shape[0])) * (-0.5)
         imgs = add_motion_to_display(imgs, motion_angles, scales)
@@ -306,7 +329,9 @@ def main(argv=None):
 
         results.append(imgs)
 
-    display(results, image_names)
+    dump("/tmp/UnFlow_test/", (results, image_names), motions)
+    print("dumped")
+    #display(results, image_names)
 
 
 if __name__ == '__main__':
