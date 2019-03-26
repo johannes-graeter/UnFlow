@@ -300,8 +300,8 @@ def main(argv=None):
         image_names.append("motion")
 
         for i in range(imgs.shape[0]):
-            imgs[i, -3, :, :, :] = imgs[i, -3, :, :, :] - imgs[i, -3, :, :, :].min()
-            imgs[i, -3, :, :, :] = imgs[i, -3, :, :, :] / imgs[i, -3, :, :, :].max()
+            imgs[i, -2, :, :, :] = imgs[i, -2, :, :, :] - imgs[i, -2, :, :, :].min()
+            imgs[i, -2, :, :, :] = imgs[i, -2, :, :, :] / imgs[i, -2, :, :, :].max()
         image_names[-3] = "inlier_prob_normalized"
 
         results.append(imgs)

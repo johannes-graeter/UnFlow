@@ -326,7 +326,7 @@ def evaluate_experiment2(name, input_fn, data_input):
         _, flow, flow_bw, motion_angles_tf, inlier_prob_mask = unsupervised_loss(
             (im1, im2, input_shape, intrinsics),
             normalization=data_input.get_normalization(),
-            params=params, augment_photometric=False, return_flow=True)
+            params=params, augment_photometric=False, return_flow=True, use_8point=False)
 
         inlier_prob_mask_stacked = tf.concat((inlier_prob_mask, inlier_prob_mask, inlier_prob_mask), axis=3)
 

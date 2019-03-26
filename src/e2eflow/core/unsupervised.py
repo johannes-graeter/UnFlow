@@ -55,7 +55,7 @@ def _track_image(op, name, namespace="train", normalize=False):
 
 
 def unsupervised_loss(batch, params, normalization=None, augment_photometric=True,
-                      return_flow=False):
+                      return_flow=False, use_8point=True):
     channel_mean = tf.constant(normalization[0]) / 255.0
     im1, im2, _, intrin = batch
     im1 = im1 / 255.0
@@ -175,7 +175,11 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # inlier_thres = 0.6  # For full size image.
     # inlier_thres = 0.03
     inlier_thres = 0.001
-    ref = get_mask_fundamental_mat(flows_fw[0], inlier_thres=inlier_thres, number_iterations=50)
+
+    ref = tf.ones_like(flows_fw[0])
+    if use_8point:
+        ref = get_mask_fundamental_mat(flows_fw[0], inlier_thres=inlier_thres, number_iterations=50)
+
     # ref = get_mask_fundamental_mat(final_flow_fw, inlier_thres=inlier_thres, number_iterations=5)
     # ref = tf.image.resize_bilinear(ref, tf.shape(flows_fw[0])[1:3])
 
@@ -279,7 +283,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     masks_out = []
     for m in masks:
         masks_out.append([tf.image.resize_bilinear(m[0][:, :, :, :], im_shape),
-                         tf.image.resize_bilinear(m[1][:, :, :, :], im_shape)])
+                          tf.image.resize_bilinear(m[1][:, :, :, :], im_shape)])
 
     ##################################
     #  DEBUG
