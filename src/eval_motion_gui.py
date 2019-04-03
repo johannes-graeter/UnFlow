@@ -1,17 +1,12 @@
-import os
-
-import tensorflow as tf
-
 import eval_gui
-from e2eflow.gui import display
 from e2eflow.kitti.data import KITTIDataOdometry
-from e2eflow.kitti.input import KITTIInput
-from e2eflow.util import config_dict
 
 FLAGS = eval_gui.FLAGS
+from eval_gui import *
 
 import cv2
 import numpy as np
+import sys
 
 from e2eflow.core.util import get_translation_rotation
 
@@ -232,22 +227,143 @@ def add_flow_to_display(imgs, flows, params):
     return imgs
 
 
-def dump(dir, data_names, motions):
+def dump(dir, data_names, motions, iterations):
     data, names = data_names
     try:
-        os.mkdir(dir)
+        os.makedirs(dir + "/motion_angles/")
     except:
         pass
 
-    for i, (images, motion) in enumerate(zip(data, motions)):
-        np.savetxt(dir + "/motion_{}.txt".format(i), motions[i])
+    for i, images, motion in zip(iterations, data, motions):
+        np.savetxt(dir + "/motion_angles/{}.txt".format(i), motion)
         for img, n in zip(images, names):
             dirname = dir + "/" + n
             try:
-                os.mkdir(dirname)
+                os.makedirs(dirname)
             except:
                 pass
-            cv2.imwrite("{}/{}.png".format(dirname, i), images)
+            img_write = np.squeeze(img, axis=0) * 255.
+            cv2.imwrite("{}/{}.png".format(dirname, i), img_write)
+
+
+def do_plotting(display_images_out, motion_angles, image_names, motion_dim, fw_bw):
+    display_images = []
+    for l in display_images_out:
+        prob_mask = l[3][motion_dim][fw_bw][:, :, :, 1]  # First object forward flow.
+        display_images.append([l[0], l[1], l[2], np.stack((prob_mask, prob_mask, prob_mask), axis=3)])
+
+    # Add empty image for motion plotting
+    for l in display_images:
+        l.append(np.ones_like(l[0]))
+
+    # Convert to numpy
+    imgs = np.array(display_images, copy=False, subok=True)
+
+    # # Draw image with tracked features.
+    # params = {
+    #     'feature_params': dict(maxCorners=1000, qualityLevel=0.3, minDistance=10, blockSize=7),
+    #     'resample_rate': 10}
+    # imgs = add_flow_to_display(imgs, flows, params)
+    # image_names[-1] = "tracklets"
+
+    # Accumulate and draw motion
+    for i in range(len(motion_angles)):
+        motion_angles[i] = motion_angles[i][motion_dim][fw_bw]
+    motion_angles = np.squeeze(np.array(motion_angles), axis=1)
+
+    # motion is from current to last, so direction of translation is negative.
+    scales = np.ones((motion_angles.shape[0])) * (-0.5)
+    imgs = add_motion_to_display(imgs, motion_angles, scales)
+
+    for i in range(imgs.shape[0]):
+        imgs[i, -2, :, :, :] = imgs[i, -2, :, :, :] - imgs[i, -2, :, :, :].min()
+        imgs[i, -2, :, :, :] = imgs[i, -2, :, :, :] / imgs[i, -2, :, :, :].max()
+
+    return imgs, image_names
+
+
+def evaluate_experiment2(name, input_fn, data_input, num_steps, start_iter):
+    config_path, params, config, ckpt, ckpt_path = get_checkpoint(name)
+
+    num_iters = start_iter
+    max_iter = FLAGS.num if FLAGS.num > 0 else None
+
+    with tf.Graph().as_default():  # , tf.device('gpu:' + FLAGS.gpu):
+        inputs = input_fn()
+        im1, im2, input_shape, intrinsics = inputs[:4]
+
+        height, width, _ = tf.unstack(tf.squeeze(input_shape), num=3, axis=0)
+
+        _, flow, flow_bw, motion_angles_tf, inlier_prob_mask = unsupervised_loss(
+            (im1, im2, input_shape, intrinsics),
+            normalization=data_input.get_normalization(),
+            params=params, augment_photometric=False, return_flow=True, use_8point=False)
+
+        flow_fw_int16 = flow_to_int16(flow)
+        flow_bw_int16 = flow_to_int16(flow_bw)
+
+        im1_pred = image_warp(im2, flow)
+        im1_diff = tf.abs(im1 - im1_pred)
+
+        image_slots = [(im1 / 255, 'first image'),
+                       # (im1_pred / 255, 'warped second image', 0, 1),
+                       (im1_diff / 255, 'warp error'),
+                       # (im2 / 255, 'second image', 1, 0),
+                       # (im2_diff / 255, '|first - second|', 1, 2),
+                       (flow_to_color(flow), 'flow prediction'),
+                       (inlier_prob_mask, 'inlier_prob'),
+                       (im1 / 255, 'motion')
+                       ]
+
+        num_ims = len(image_slots)
+        image_ops = [t[0] for t in image_slots]
+        image_names = [t[1] for t in image_slots]
+
+        sess_config = tf.ConfigProto(allow_soft_placement=True)
+
+        with tf.Session(config=sess_config) as sess:
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.local_variables_initializer())
+
+            restore_networks(sess, params, ckpt, ckpt_path)
+
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+            image_lists = []
+            iterations = []
+
+            # JG: return flow
+            flows = []
+            motion_angles = []
+            while not coord.should_stop() and (num_iters <= num_steps + start_iter):
+                all_results = sess.run(
+                    [flow, flow_bw, flow_fw_int16, flow_bw_int16, motion_angles_tf] + image_ops)
+                # JG: get flow
+                flows.append(all_results[0])
+                # JG: get motion
+                motion_angles.append(all_results[4])
+
+                # flow_fw_res, flow_bw_res, flow_fw_int16_res, flow_bw_int16_res = all_results[:4]
+                all_results = all_results[5:]
+                image_results = all_results[:num_ims]
+                image_lists.append(image_results)
+                iterations.append(num_iters)
+
+                sys.stdout.write('\r')
+                num_iters += 1
+                sys.stdout.write("-- evaluating '{}': {}/{}".format(name, num_iters, max_iter))
+                sys.stdout.flush()
+                print()
+
+            coord.request_stop()
+            coord.join(threads)
+
+            plot_res = do_plotting(image_lists, motion_angles, image_names, motion_dim=1, fw_bw=0)
+            dump("/tmp/UnFlow_results/", plot_res, motion_angles, iterations)
+            print("dumped")
+
+    return num_iters
 
 
 def main(argv=None):
@@ -269,69 +385,37 @@ def main(argv=None):
         raise Exception("Motion eval only implemented for KITTI yet!")
 
     input_fn0 = getattr(data_input, 'input_raw')
-    shift = np.random.randint(0, 1e6)  # get different set of images each call
-    print("shift by {} images".format(shift))
+
+    # shift = np.random.randint(0, 1e6)  # get different set of images each call
+    # print("shift by {} images".format(shift))
 
     # shift = 215441
 
-    def input_fn():
-        return input_fn0(augment_crop=False, center_crop=True, seed=None, swap_images=False, shift=shift)
+    def input_fn(iter):
+        return input_fn0(augment_crop=False, center_crop=True, seed=None, swap_images=False, shift=iter)
 
     results = []
     motion_dim = 1
     fw_bw = 0
 
-    motions = []
+    start_iter = 0
+    num_steps = 50
+
     for n, name in enumerate(FLAGS.ex.split(',')):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
         # Motion angles are roll, pitch,yaw, translation_yaw, translation ptich from current image to last image
-        display_images_out, image_names, flows, motion_angles = eval_gui.evaluate_experiment(name, input_fn, data_input,
-                                                                                             do_resize=False)
-        flows = np.squeeze(np.array(flows), axis=1)
+        # eval_gui.evaluate_experiment(name, input_fn, data_input, do_resize=False)
+        try:
+            while True:
+                print("start_iter", start_iter)
+                evaluate_experiment2(name, lambda: input_fn(start_iter/2), data_input, num_steps, start_iter)
+                start_iter += num_steps
 
-        display_images = []
-        for l in display_images_out:
-            prob_mask = l[3][motion_dim][fw_bw][:, :, :, 1]  # First object forward flow.
-            display_images.append([l[0], l[1], l[2], np.stack((prob_mask, prob_mask, prob_mask), axis=3)])
-
-        # Add empty image for motion plotting
-        for l in display_images:
-            l.append(np.ones_like(l[0]))
-
-        # Convert to numpy
-        imgs = np.array(display_images, copy=False, subok=True)
-
-        # # Draw image with tracked features.
-        # params = {
-        #     'feature_params': dict(maxCorners=1000, qualityLevel=0.3, minDistance=10, blockSize=7),
-        #     'resample_rate': 10}
-        # imgs = add_flow_to_display(imgs, flows, params)
-        # image_names[-1] = "tracklets"
-
-        # Accumulate and draw motion
-        for i in range(len(motion_angles)):
-            motion_angles[i] = motion_angles[i][motion_dim][fw_bw]
-        motion_angles = np.squeeze(np.array(motion_angles), axis=1)
-
-        # save for dump
-        motions.append(motion_angles)
-
-        # motion is from current to last, so direction of translation is negative.
-        scales = np.ones((motion_angles.shape[0])) * (-0.5)
-        imgs = add_motion_to_display(imgs, motion_angles, scales)
-        image_names.append("motion")
-
-        for i in range(imgs.shape[0]):
-            imgs[i, -2, :, :, :] = imgs[i, -2, :, :, :] - imgs[i, -2, :, :, :].min()
-            imgs[i, -2, :, :, :] = imgs[i, -2, :, :, :] / imgs[i, -2, :, :, :].max()
-        image_names[-3] = "inlier_prob_normalized"
-
-        results.append(imgs)
-
-    dump("/tmp/UnFlow_test/", (results, image_names), motions)
-    print("dumped")
-    #display(results, image_names)
+        except tf.errors.OutOfRangeError as exc:
+            print(exc.message)
+            print("Out of range thrown, returning")
+            pass
 
 
 if __name__ == '__main__':

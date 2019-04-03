@@ -243,7 +243,7 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Add up all local mask consistency losses
     local_mask_consistency_loss = [0., 0.]
     # Different weight for static and dynamic, make trainable?
-    obj_weights = [1., 3.]
+    obj_weights = [5., 20.]
     assert (len(obj_weights) == num_objects)
     for w, (ml_fw, ml_bw) in zip(obj_weights, mask_consistency_losses):
         local_mask_consistency_loss[0] += w * ml_fw
@@ -281,9 +281,9 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
         #              #+ tf.exp(-weight_bw) * fun_loss_bw + tf.exp(-weight_bw_mask) * bw_mask_loss + weight_bw + weight_bw_mask
 
     masks_out = []
-    for m in masks:
-        masks_out.append([tf.image.resize_bilinear(m[0][:, :, :, :], im_shape),
-                          tf.image.resize_bilinear(m[1][:, :, :, :], im_shape)])
+    for fw_m, bw_m in masks:
+        masks_out.append([tf.image.resize_bilinear(fw_m[:, :, :, :], im_shape),
+                          tf.image.resize_bilinear(bw_m[:, :, :, :], im_shape)])
 
     ##################################
     #  DEBUG
