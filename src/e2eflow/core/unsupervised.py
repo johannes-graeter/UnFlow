@@ -251,34 +251,29 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
 
     funnet_log_unc = get_funnet_log_uncertainties(size=num_objects + 2)
 
-    # Add losses from funnet to problem.
+    # Add losses from funnet to optimization problem.
     if params.get('train_motion_only'):
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
-        final_loss = regularization_loss
-
-        assert (len(fun_losses) == num_objects)
-        # Add loss for motion.
-        for i, l in enumerate(fun_losses):
-            final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[i]), l[0] + l[1])
-
-        # Add loss for global mask consistency -> all probabilities add up to one.
-        final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-2]),
-                                    global_mask_consistency_loss[0] + global_mask_consistency_loss[1])
-
-        # Add loss for local mask constitency -> output resembles input.
-        final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-1]),
-                                    local_mask_consistency_loss[0] + local_mask_consistency_loss[1])
-
-        # Add regularization for all weights.
-        for i in range(funnet_log_unc.shape.as_list()[0]):
-            final_loss += tf.scalar_mul(0.5, funnet_log_unc[i])
-
     else:
-        raise Exception("Not implemented flow estimation with motion yet.")
-        # regularization_loss = tf.losses.get_regularization_loss()
-        # final_loss = regularization_loss + tf.exp(-weight_flow) * combined_loss + weight_flow\
-        #              + tf.exp(-weight_fw) * fun_loss + tf.exp(-weight_fw_mask) * fw_mask_loss + weight_fw + weight_fw_mask \
-        #              #+ tf.exp(-weight_bw) * fun_loss_bw + tf.exp(-weight_bw_mask) * bw_mask_loss + weight_bw + weight_bw_mask
+        regularization_loss = tf.losses.get_regularization_loss()
+    final_loss = regularization_loss
+
+    assert (len(fun_losses) == num_objects)
+    # Add loss for motion.
+    for i, l in enumerate(fun_losses):
+        final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[i]), l[0] + l[1])
+
+    # Add loss for global mask consistency -> all probabilities add up to one.
+    final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-2]),
+                                global_mask_consistency_loss[0] + global_mask_consistency_loss[1])
+
+    # Add loss for local mask constitency -> output resembles input.
+    final_loss += tf.scalar_mul(0.5 * tf.exp(-funnet_log_unc[-1]),
+                                local_mask_consistency_loss[0] + local_mask_consistency_loss[1])
+
+    # Add regularization for all weights.
+    for i in range(funnet_log_unc.shape.as_list()[0]):
+        final_loss += tf.scalar_mul(0.5, funnet_log_unc[i])
 
     masks_out = []
     for fw_m, bw_m in masks:
