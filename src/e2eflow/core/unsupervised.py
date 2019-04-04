@@ -55,7 +55,7 @@ def _track_image(op, name, namespace="train", normalize=False):
 
 
 def unsupervised_loss(batch, params, normalization=None, augment_photometric=True,
-                      return_flow=False, use_8point=True):
+                      return_flow=False, use_8point=False):
     channel_mean = tf.constant(normalization[0]) / 255.0
     im1, im2, _, intrin = batch
     im1 = im1 / 255.0
