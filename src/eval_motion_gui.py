@@ -409,7 +409,7 @@ def main(argv=None):
         try:
             while True:
                 print("start_iter", start_iter)
-                evaluate_experiment2(name, lambda: input_fn(start_iter/2), data_input, num_steps, start_iter)
+                evaluate_experiment2(name, lambda: input_fn(-start_iter), data_input, num_steps, start_iter)
                 start_iter += num_steps
 
         except tf.errors.OutOfRangeError as exc:
