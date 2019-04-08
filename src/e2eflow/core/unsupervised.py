@@ -254,9 +254,10 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
     # Add losses from funnet to optimization problem.
     if params.get('train_motion_only'):
         regularization_loss = tf.losses.get_regularization_loss(scope="funnet")
+        final_loss = regularization_loss
     else:
         regularization_loss = tf.losses.get_regularization_loss()
-    final_loss = regularization_loss
+        final_loss = combined_loss + regularization_loss
 
     assert (len(fun_losses) == num_objects)
     # Add loss for motion.
