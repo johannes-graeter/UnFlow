@@ -406,10 +406,14 @@ def main(argv=None):
         # This should be sequences.
         # Motion angles are roll, pitch,yaw, translation_yaw, translation ptich from current image to last image
         # eval_gui.evaluate_experiment(name, input_fn, data_input, do_resize=False)
+        dumped = False
         try:
             while True:
                 print("start_iter", start_iter)
                 evaluate_experiment2(name, lambda: input_fn(-start_iter), data_input, num_steps, start_iter)
+                if not dumped:
+                    data_input.dump_names("/tmp/UnFlow_results/filenames.txt")
+                    dumped = True
                 start_iter += num_steps
 
         except tf.errors.OutOfRangeError as exc:

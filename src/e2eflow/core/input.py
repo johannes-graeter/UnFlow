@@ -148,6 +148,12 @@ class Input:
         """Standard prerocessing does nothing. If you need to prescale overwrite that."""
         return image, calib_tf
 
+    def dump_names(self, filename):
+        with open(filename, "w") as f:
+            filenames_1, filenames_2, calib_dir, key = zip(*self.filenames_extended)
+            for n, name in enumerate(filenames_2):
+                f.write("{} {}\n".format(n, name))
+
     def input_raw(self, swap_images=True, sequence=True,
                   augment_crop=True, shift=0, seed=0,
                   center_crop=False, skip=0):
@@ -201,17 +207,17 @@ class Input:
             random.shuffle(filenames)
         print("Input {} frame pairs.".format(len(filenames)))
 
-        filenames_extended = []
+        self.filenames_extended = []
         # print("fs", filenames[0])
         for fn1, fn2, calib, key in filenames:
-            filenames_extended.append((fn1, fn2, calib, key))
+            self.filenames_extended.append((fn1, fn2, calib, key))
             if swap_images:
-                filenames_extended.append((fn2, fn1, calib, key))
+                self.filenames_extended.append((fn2, fn1, calib, key))
 
-        shift = shift % len(filenames_extended)
-        filenames_extended = list(np.roll(filenames_extended, shift, axis=0))
+        shift = shift % len(self.filenames_extended)
+        self.filenames_extended = list(np.roll(self.filenames_extended, shift, axis=0))
 
-        filenames_1, filenames_2, calib_dir, key = zip(*filenames_extended)
+        filenames_1, filenames_2, calib_dir, key = zip(*self.filenames_extended)
         filenames_1 = list(filenames_1)
         filenames_2 = list(filenames_2)
 
