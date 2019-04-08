@@ -375,6 +375,8 @@ def main(argv=None):
 
     if FLAGS.dataset == 'kitti':
         data = KITTIDataOdometry(dirs['data_testing'], development=False, do_fetch=False)
+        data.image_subdirs = ['image_2']
+        data.calib_identifiers = ['P2']
         data_input = KITTIInput(data, batch_size=1, normalize=False, dims=input_dims, num_threads=1)
     else:
         raise Exception("Motion eval only implemented for KITTI yet!")

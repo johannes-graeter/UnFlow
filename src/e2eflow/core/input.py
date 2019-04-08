@@ -151,8 +151,8 @@ class Input:
     def dump_names(self, filename):
         with open(filename, "w") as f:
             filenames_1, filenames_2, calib_dir, key = zip(*self.filenames_extended)
-            for n, name in enumerate(filenames_2):
-                f.write("{} {}\n".format(n, name))
+            for n, (name, calib_dir) in enumerate(zip(filenames_2, calib_dir)):
+                f.write("{} {} {}\n".format(n, name, calib_dir))
 
     def input_raw(self, swap_images=True, sequence=True,
                   augment_crop=True, shift=0, seed=0,
