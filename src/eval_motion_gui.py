@@ -227,15 +227,10 @@ def add_flow_to_display(imgs, flows, params):
     return imgs
 
 
-def dump(dir, data_names, motions, iterations):
+def dump_images(dir, data_names, iterations):
     data, names = data_names
-    try:
-        os.makedirs(dir + "/motion_angles/")
-    except:
-        pass
 
-    for i, images, motion in zip(iterations, data, motions):
-        np.savetxt(dir + "/motion_angles/{}.txt".format(i), motion)
+    for i, images in zip(iterations, data):
         for img, n in zip(images, names):
             dirname = dir + "/" + n
             try:
@@ -244,6 +239,15 @@ def dump(dir, data_names, motions, iterations):
                 pass
             img_write = np.squeeze(img, axis=0) * 255.
             cv2.imwrite("{}/{}.png".format(dirname, i), img_write)
+
+
+def dump_motion(dir, motions, iterations):
+    try:
+        os.makedirs(dir + "/motion_angles/")
+    except:
+        pass
+    for i, motion in zip(iterations, motions):
+        np.savetxt(dir + "/motion_angles/{}.txt".format(i), motion)
 
 
 def do_plotting(display_images_out, motion_angles, image_names, motion_dim, fw_bw):
@@ -265,11 +269,6 @@ def do_plotting(display_images_out, motion_angles, image_names, motion_dim, fw_b
     #     'resample_rate': 10}
     # imgs = add_flow_to_display(imgs, flows, params)
     # image_names[-1] = "tracklets"
-
-    # Accumulate and draw motion
-    for i in range(len(motion_angles)):
-        motion_angles[i] = motion_angles[i][motion_dim][fw_bw]
-    motion_angles = np.squeeze(np.array(motion_angles), axis=1)
 
     # motion is from current to last, so direction of translation is negative.
     scales = np.ones((motion_angles.shape[0])) * (-0.5)
@@ -359,11 +358,7 @@ def evaluate_experiment2(name, input_fn, data_input, num_steps, start_iter):
             coord.request_stop()
             coord.join(threads)
 
-            plot_res = do_plotting(image_lists, motion_angles, image_names, motion_dim=1, fw_bw=0)
-            dump("/tmp/UnFlow_results/", plot_res, motion_angles, iterations)
-            print("dumped")
-
-    return num_iters
+    return image_lists, motion_angles, image_names, iterations
 
 
 def main(argv=None):
@@ -401,6 +396,8 @@ def main(argv=None):
     start_iter = 0
     num_steps = 50
 
+    dump_images = False
+
     for n, name in enumerate(FLAGS.ex.split(',')):
         # Here we get eval images, names and the estimated flow per iteration.
         # This should be sequences.
@@ -410,7 +407,20 @@ def main(argv=None):
         try:
             while True:
                 print("start_iter", start_iter)
-                evaluate_experiment2(name, lambda: input_fn(-start_iter), data_input, num_steps, start_iter)
+                image_lists, motion_angles, image_names, iterations = evaluate_experiment2(name, lambda: input_fn(
+                    -start_iter), data_input, num_steps, start_iter)
+
+                # Extract motion corresponding to ego motion.
+                for i in range(len(motion_angles)):
+                    motion_angles[i] = motion_angles[i][motion_dim][fw_bw]
+                motion_angles = np.squeeze(np.array(motion_angles), axis=1)
+
+                dump_motion("/tmp/UnFlow_results/", motion_angles, iterations)
+
+                if dump_images:
+                    plot_res = do_plotting(image_lists, motion_angles, image_names, motion_dim=motion_dim, fw_bw=fw_bw)
+                    dump_images("/tmp/UnFlow_results/", plot_res, iterations)
+
                 if not dumped:
                     data_input.dump_names("/tmp/UnFlow_results/filenames.txt")
                     dumped = True
