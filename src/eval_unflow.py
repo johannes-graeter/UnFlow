@@ -95,15 +95,48 @@ def main(args):
         id = file.split("/")[-1].strip(".txt")
         assert (id in ids)
         p = np.reshape(np.loadtxt(file), (-1, 3, 4))
-        gt[id] = np.concatenate((p, np.array[[0., 0., 0., 1.]]))
+        a = np.reshape(np.tile(np.array([[0., 0., 0., 1.]]), p.shape[0]), (-1, 1, 4))
+        gt[id] = np.concatenate((p, a), axis=1)
 
     gt_deltas = {}
+    scales = {}
     for key, poses in gt.items():
         poses_inv = np.linalg.inv(poses)
-        poses_inv = poses_inv[1:, :, :]
-        poses_inv = np.concatenate((np.eye(4), poses_inv), axis=0)
-        deltas = poses_inv.dot(poses)
+        poses_inv = poses_inv[:-1, :, :]
+        poses_inv = np.concatenate((np.array([np.eye(4)]), poses_inv), axis=0)
+        deltas = np.matmul(poses_inv, poses)
+
+        # Save delta poses.
         gt_deltas[key] = deltas
+
+        # Get scales from deltas
+        scales[key] = np.linalg.norm(deltas[:, :3, -1], axis=1)
+
+    # Add scales to output.
+    output_scaled = {}
+    for id in ids:
+        output_scaled[id] = {}
+
+    for key, scale_mat in scales.items():
+        for row, motion in output[key].items():
+            cur_motion = np.concatenate((motion[:3, :3], np.transpose(np.array([motion[:3, -1]])) * scale_mat[row]),
+                                        axis=1)
+            output_scaled[key][row] = np.concatenate((cur_motion, np.array([[0., 0., 0., 1.]])))
+
+    # Accumulate output.
+    last = np.eye(4)
+    acc = {}
+    for id in ids:
+        acc[id] = [last[:3, :4].flatten()]
+
+    for id, motions in output_scaled.items():
+        for num, m in motions.items():
+            last = last.dot(m)
+            acc[id].append(last[:3, :4].flatten())
+
+    # Dump it.
+    for key, data in acc.items():
+        np.savetxt(args.output + "/result_{}.txt".format(key), np.array(data))
 
 
 if __name__ == '__main__':
