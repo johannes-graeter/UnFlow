@@ -7,6 +7,7 @@ from eval_gui import *
 import cv2
 import numpy as np
 import sys
+import datetime
 
 from e2eflow.core.util import get_translation_rotation
 
@@ -242,10 +243,6 @@ def dump_images(dir, data_names, iterations):
 
 
 def dump_motion(dir, motions, iterations):
-    try:
-        os.makedirs(dir + "/motion_angles/")
-    except:
-        pass
     for i, motion in zip(iterations, motions):
         np.savetxt(dir + "/motion_angles/{}.txt".format(i), motion)
 
@@ -396,7 +393,7 @@ def main(argv=None):
     fw_bw = 0
 
     start_iter = 0
-    num_steps = 50
+    num_steps = 100
 
     dump_images = False
 
@@ -408,6 +405,12 @@ def main(argv=None):
         dumped = False
         try:
             while True:
+                dir = "/tmp/UnFlow_results_{}/".format(datetime.datetime.now())
+                try:
+                    os.makedirs(dir + "/motion_angles/")
+                except:
+                    pass
+
                 print("start_iter", start_iter)
                 image_lists, motion_angles, image_names, iterations = evaluate_experiment2(name, lambda: input_fn(
                     -start_iter), data_input, num_steps, start_iter)
@@ -417,14 +420,14 @@ def main(argv=None):
                     motion_angles[i] = motion_angles[i][motion_dim][fw_bw]
                 motion_angles = np.squeeze(np.array(motion_angles), axis=1)
 
-                dump_motion("/tmp/UnFlow_results/", motion_angles, iterations)
+                dump_motion(dir, motion_angles, iterations)
 
                 if dump_images:
                     plot_res = do_plotting(image_lists, motion_angles, image_names, motion_dim=motion_dim, fw_bw=fw_bw)
-                    dump_images("/tmp/UnFlow_results/", plot_res, iterations)
+                    dump_images(dir, plot_res, iterations)
 
                 if not dumped:
-                    data_input.dump_names("/tmp/UnFlow_results/filenames.txt")
+                    data_input.dump_names(dir+"/filenames.txt")
                     dumped = True
                 start_iter += num_steps
 
