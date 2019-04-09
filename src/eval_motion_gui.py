@@ -403,14 +403,13 @@ def main(argv=None):
         # Motion angles are roll, pitch,yaw, translation_yaw, translation ptich from current image to last image
         # eval_gui.evaluate_experiment(name, input_fn, data_input, do_resize=False)
         dumped = False
+        dir = "/tmp/UnFlow_results_{}/".format(datetime.datetime.now())
+        try:
+            os.makedirs(dir + "/motion_angles/")
+        except:
+            pass
         try:
             while True:
-                dir = "/tmp/UnFlow_results_{}/".format(datetime.datetime.now())
-                try:
-                    os.makedirs(dir + "/motion_angles/")
-                except:
-                    pass
-
                 print("start_iter", start_iter)
                 image_lists, motion_angles, image_names, iterations = evaluate_experiment2(name, lambda: input_fn(
                     -start_iter), data_input, num_steps, start_iter)
