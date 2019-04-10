@@ -48,6 +48,20 @@ def parse_args():
     return parse_args
 
 
+def accumulate_output(ids, output):
+    # Accumulate output.
+    acc = {}
+    for id in ids:
+        acc[id] = [np.eye(4)[:3, :4].flatten()]
+
+    for id, motions in output.items():
+        last = np.eye(4)
+        for num, m in motions.items():
+            last = last.dot(m)
+            acc[id].append(last[:3, :4].flatten())
+    return acc
+
+
 def main(args):
     # load calibs
     calib_paths = []
@@ -80,8 +94,10 @@ def main(args):
             rot, trans = make_transform(angles)
             motion = to_affine(rot, trans)
             # Transform to camera 0 (gray left)
-            extr = calibs[calib_path]  # extrinsics from cam0 to cam1
-            motion_cam_0 = np.linalg.inv(extr).dot(motion.dot(extr))
+            # extr = calibs[calib_path]  # extrinsics from cam0 to cam1
+            # motion_cam_0 = np.linalg.inv(extr).dot(motion.dot(extr))
+            print("TODO: Debug extrinisics, zero to one.")
+            motion_cam_0 = motion
 
             sequ_num = sequ.split("/")
             for id in ids:
@@ -99,6 +115,9 @@ def main(args):
         gt[id] = np.concatenate((p, a), axis=1)
 
     gt_deltas = {}
+    for id in ids:
+        gt_deltas[id] = {}
+
     scales = {}
     for key, poses in gt.items():
         poses_inv = np.linalg.inv(poses)
@@ -107,7 +126,8 @@ def main(args):
         deltas = np.matmul(poses_inv, poses)
 
         # Save delta poses.
-        gt_deltas[key] = deltas
+        for i in range(deltas.shape[0]):
+            gt_deltas[key][i] = deltas[i, :, :]
 
         # Get scales from deltas
         scales[key] = np.linalg.norm(deltas[:, :3, -1], axis=1)
@@ -123,20 +143,15 @@ def main(args):
                                         axis=1)
             output_scaled[key][row] = np.concatenate((cur_motion, np.array([[0., 0., 0., 1.]])))
 
-    # Accumulate output.
-    last = np.eye(4)
-    acc = {}
-    for id in ids:
-        acc[id] = [last[:3, :4].flatten()]
-
-    for id, motions in output_scaled.items():
-        for num, m in motions.items():
-            last = last.dot(m)
-            acc[id].append(last[:3, :4].flatten())
+    acc = accumulate_output(ids, output)
+    # acc_test = accumulate_output(ids, gt_deltas)
 
     # Dump it.
     for key, data in acc.items():
         np.savetxt(args.output + "/result_{}.txt".format(key), np.array(data))
+
+    # for key, data in acc_test.items():
+    #     np.savetxt(args.output + "/test_gt_{}.txt".format(key), np.array(data))
 
 
 if __name__ == '__main__':
