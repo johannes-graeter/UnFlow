@@ -201,14 +201,14 @@ class Input:
                     fn2 = files[i + 1]
                     calib_dir, key = intrinsic_dirs[dir_path]
 
-                    # test
-                    test_ids = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
-                    passes = False
-                    for ti in test_ids:
-                        if "/" + ti + "/" in fn1:
-                            passes = True
-                            break
-                    assert passes
+                    # # test
+                    # test_ids = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
+                    # passes = False
+                    # for ti in test_ids:
+                    #     if "/" + ti + "/" in fn1:
+                    #         passes = True
+                    #         break
+                    # assert passes
 
                     filenames.append((fn1, fn2, calib_dir, key))
 
