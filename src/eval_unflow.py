@@ -94,10 +94,8 @@ def main(args):
             rot, trans = make_transform(angles)
             motion = to_affine(rot, trans)
             # Transform to camera 0 (gray left)
-            # extr = calibs[calib_path]  # extrinsics from cam0 to cam1
-            # motion_cam_0 = np.linalg.inv(extr).dot(motion.dot(extr))
-            print("TODO: Debug extrinisics, zero to one.")
-            motion_cam_0 = motion
+            extr = calibs[calib_path]  # extrinsics from cam0 to cam1
+            motion_cam_0 = np.linalg.inv(extr).dot(motion.dot(extr))
 
             sequ_num = sequ.split("/")
             for id in ids:
