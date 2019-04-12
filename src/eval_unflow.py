@@ -62,6 +62,14 @@ def accumulate_output(ids, output):
     return acc
 
 
+def parse_calib_cam(inp):
+    calib_mat = np.reshape(np.array(inp[1:]).astype(float), (3, 4))
+    a = np.concatenate((np.eye(3), np.transpose(np.array([calib_mat[:, 3]])) * 1e-3), axis=1)
+    a = np.concatenate((a, np.array([[0., 0., 0., 1.]])), axis=0)
+
+    return a
+
+
 def main(args):
     # load calibs
     calib_paths = []
@@ -74,9 +82,12 @@ def main(args):
         with open(p.strip("\n"), "r") as f:
             ls = f.readlines()
             a = ls[-1].split(" ")
-            assert (a[0] == "Tr:")
-            calibs[p] = np.concatenate(
-                (np.reshape(np.array(a[1:]).astype(float), (3, 4)), np.array([[0., 0., 0., 1.]])), axis=0)
+            b = ls[-2].split(" ")
+            assert (a[0] == "P3:")
+            assert (b[0] == "P2:")
+            calibs[p] = {}
+            calibs[p][a[0]] = parse_calib_cam(a)
+            calibs[p][b[0]] = parse_calib_cam(b)
 
     ids = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"]
 
@@ -94,7 +105,14 @@ def main(args):
             rot, trans = make_transform(angles)
             motion = to_affine(rot, trans)
             # Transform to camera 0 (gray left)
-            extr = calibs[calib_path]  # extrinsics from cam0 to cam1
+            if "image_2" in sequ:
+                id = 'P2:'
+            elif "image_3" in sequ:
+                id = 'P3:'
+            else:
+                raise Exception("Wrong calib")
+
+            extr = calibs[calib_path][id]  # extrinsics from cam0 to cam1
             motion_cam_0 = np.linalg.inv(extr).dot(motion.dot(extr))
 
             sequ_num = sequ.split("/")
@@ -148,8 +166,8 @@ def main(args):
     for key, data in acc.items():
         np.savetxt(args.output + "/result_{}.txt".format(key), np.array(data))
 
-    # for key, data in acc_test.items():
-    #     np.savetxt(args.output + "/test_gt_{}.txt".format(key), np.array(data))
+        # for key, data in acc_test.items():
+        #     np.savetxt(args.output + "/test_gt_{}.txt".format(key), np.array(data))
 
 
 if __name__ == '__main__':
