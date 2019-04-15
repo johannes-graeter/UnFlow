@@ -40,7 +40,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="options for script")
     parser.add_argument("-p", "--path",
                         help="Path to folder with textfiles with angles as rotation and trasnlation direction.")
-    parser.add_argument("-p5p", "--path_5_point",
+    parser.add_argument("-p5p", "--path_5_point", default=None,
                         help="Path to folder with textfiles with angles as rotation and trasnlation direction.")
     parser.add_argument("-l", "--lookup", help="Path to file with nunber to kitti sequence and calib")
     parser.add_argument("-o", "--output", help="Output folder.")
@@ -125,8 +125,10 @@ def main(args):
             rot, trans = make_transform(angles)
             motion = to_affine(rot, trans)
 
-            motion_5point = np.loadtxt(os.path.join(args.path_5_point, "{}.txt".format(num)))
-            motion_5_point = np.concatenate((np.reshape(motion_5_point, (3, 4)), np.array([[0., 0., 0., 1.]])), axis=0)
+            if args.path_5_point is not None:
+                motion_5point = np.loadtxt(os.path.join(args.path_5_point, "{}.txt".format(num)))
+                motion_5_point = np.concatenate((np.reshape(motion_5_point, (3, 4)), np.array([[0., 0., 0., 1.]])),
+                                                axis=0)
 
             # Transform to camera 0 (gray left)
             if "image_2" in sequ:
@@ -138,14 +140,16 @@ def main(args):
 
             extr = calibs[calib_path][id]  # extrinsics from cam0 to cam1
             motion_cam_0 = np.linalg.inv(extr).dot(motion.dot(extr))
-            motion_5point_cam0 = np.linalg.inv(extr).dot(motion_5point.dot(extr))
+            if args.path_5_point is not None:
+                motion_5point_cam0 = np.linalg.inv(extr).dot(motion_5point.dot(extr))
 
             sequ_num = sequ.split("/")
             for id in ids:
                 if id in sequ_num:
                     num = int(sequ_num[-1].strip(".png"))
                     output[id][num] = motion_cam_0
-                    output_5p[id][num] = motion_5point_cam0
+                    if args.path_5_point is not None:
+                        output_5p[id][num] = motion_5point_cam0
 
     # Read groundtruth
     gt = {}
@@ -175,22 +179,15 @@ def main(args):
         scales[key] = np.linalg.norm(deltas[:, :3, -1], axis=1)
 
     # Add scales to output.
-    output_scaled = scale_result(output, ids, scales)
-    acc = accumulate_output(ids, output_scaled)
-
-    output_scaled_5point = scale_result(output_5p, ids, scales)
-    acc_5p = accumulate_output(ids, output_scaled_5point)
-    # acc_test = accumulate_output(ids, gt_deltas)
-
+    acc = accumulate_output(ids, scale_result(output, ids, scales))
     # Dump it.
     for key, data in acc.items():
         np.savetxt(args.output + "/result_{}.txt".format(key), np.array(data))
 
-    for key, data in acc_5p.items():
-        np.savetxt(args.output + "/result_5p_{}.txt".format(key), np.array(data))
-
-        # for key, data in acc_test.items():
-        #     np.savetxt(args.output + "/test_gt_{}.txt".format(key), np.array(data))
+    if args.path_5_point is not None:
+        acc_5p = accumulate_output(ids, scale_result(output_5p, ids, scales))
+        for key, data in acc_5p.items():
+            np.savetxt(args.output + "/result_5p_{}.txt".format(key), np.array(data))
 
 
 if __name__ == '__main__':
