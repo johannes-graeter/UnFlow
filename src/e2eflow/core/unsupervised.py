@@ -58,6 +58,8 @@ def unsupervised_loss(batch, params, normalization=None, augment_photometric=Tru
                       return_flow=False, use_8point=False):
     channel_mean = tf.constant(normalization[0]) / 255.0
     im1, im2, _, intrin = batch
+
+    # intrin = tf.Print(intrin, [intrin])
     im1 = im1 / 255.0
     im2 = im2 / 255.0
     im_shape = tf.shape(im1)[1:3]

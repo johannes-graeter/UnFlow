@@ -238,9 +238,9 @@ class Input:
         with tf.variable_scope('train_inputs'):
             image_1 = read_png_image(filenames_1)
             image_2 = read_png_image(filenames_2)
-            calib_tf = self.read_calib(calib_filenames, keys)
+            calib_tf_orig = self.read_calib(calib_filenames, keys)
 
-            image_1, calib_tf = self._preprocess_input(image_1, calib_tf)
+            image_1, calib_tf_preproc = self._preprocess_input(image_1, calib_tf_orig)
             image_2, _ = self._preprocess_input(image_2)
 
             shape_before_preproc = tf.shape(image_1)
@@ -249,10 +249,13 @@ class Input:
                 # img_h, img_w, ch = image_1.shape.as_list()
                 # if (out_height > img_h) or (out_width > img_w):
                 # raise Exception("No crop for augmentation possible, input image too small.")
-                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf, out_h=out_h, out_w=out_w)
+                image_1, image_2, calib_tf = data_augmentation(image_1, image_2, calib_tf_preproc, out_h=out_h,
+                                                               out_w=out_w)
             elif center_crop:
-                image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf)
+                image_1, calib_tf = self._resize_crop_or_pad(image_1, calib_tf_preproc)
                 image_2, _ = self._resize_crop_or_pad(image_2)
+
+            # calib_tf = tf.Print(calib_tf, [calib_tf_orig, calib_tf_preproc, calib_tf])
 
             # Reshape for fixing the size if that hasn't been done already.
             if image_1.shape.as_list()[0] is None:

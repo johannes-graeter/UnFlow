@@ -332,17 +332,20 @@ def evaluate_experiment2(name, input_fn, data_input, num_steps, start_iter):
             # JG: return flow
             flows = []
             motion_angles = []
+            intrinsics_list = []
             while not coord.should_stop() and (num_iters <= num_steps + start_iter):
                 all_results = sess.run(
-                    [flow, flow_bw, flow_fw_int16, flow_bw_int16, motion_angles_tf] + image_ops)
+                    [flow, flow_bw, flow_fw_int16, flow_bw_int16, motion_angles_tf, intrinsics] + image_ops)
                 # JG: get flow
                 flows.append(all_results[0])
                 # JG: get motion
                 motion_angles.append(all_results[4])
+                # JG: get intrinsics
+                intrinsics_list.append(all_results[5])
 
                 # flow_fw_res, flow_bw_res, flow_fw_int16_res, flow_bw_int16_res = all_results[:4]
                 all_results = all_results[5:]
-                image_results = all_results[:num_ims]
+                image_results = all_results[-num_ims:]
                 image_lists.append(image_results)
                 iterations.append(num_iters)
 
@@ -355,7 +358,22 @@ def evaluate_experiment2(name, input_fn, data_input, num_steps, start_iter):
             coord.request_stop()
             coord.join(threads)
 
-    return image_lists, motion_angles, image_names, iterations
+    return image_lists, motion_angles, image_names, iterations, flows, intrinsics_list
+
+
+def calc_5point(im0, flow, params, intrinsics):
+    points = get_keypoints(im0, params['feature_params'])
+    tracked_points = track_points(np.array([flow]), points)
+
+    E, mask = cv2.findEssentialMat(tracked_points[0], tracked_points[1], intrinsics, method=cv2.LMEDS)
+    retval, R, t, mask = cv2.recoverPose(E, tracked_points[0], tracked_points[1], cameraMatrix=intrinsics,
+                                         mask=mask)
+    return np.concatenate((R, t), axis=1)
+
+
+def dump_motion_5point(write_dir, motions, iterations):
+    for i, motion in zip(iterations, motions):
+        np.savetxt(write_dir + "/motions_5_point_{}.txt".format(i), motion.flatten())
 
 
 def main(argv=None):
@@ -411,8 +429,12 @@ def main(argv=None):
         try:
             while True:
                 print("start_iter", start_iter)
-                image_lists, motion_angles, image_names, iterations = evaluate_experiment2(name, lambda: input_fn(
-                    -start_iter), data_input, num_steps, start_iter)
+                image_lists, motion_angles, image_names, iterations, flows, intrinsics = evaluate_experiment2(name,
+                                                                                                              lambda: input_fn(
+                                                                                                                  -start_iter),
+                                                                                                              data_input,
+                                                                                                              num_steps,
+                                                                                                              start_iter)
 
                 # Extract motion corresponding to ego motion.
                 for i in range(len(motion_angles)):
@@ -421,12 +443,22 @@ def main(argv=None):
 
                 dump_motion(dir, motion_angles, iterations)
 
+                motions_5point = []
+                params = {
+                    'feature_params': dict(maxCorners=1000, qualityLevel=0.3, minDistance=10, blockSize=7),
+                    'resample_rate': 10}
+                for i in range(len(image_lists)):
+                    first_img = image_lists[i][0][0]
+                    m = calc_5point(first_img, flows[i][0], params, np.array(intrinsics[i][0]))
+                    motions_5point.append(m)
+
+                dump_motion_5point(dir, motions_5point, iterations)
                 if dump_images:
                     plot_res = do_plotting(image_lists, motion_angles, image_names, motion_dim=motion_dim, fw_bw=fw_bw)
                     dump_images(dir, plot_res, iterations)
 
                 if not dumped:
-                    data_input.dump_names(dir+"/filenames.txt")
+                    data_input.dump_names(dir + "/filenames.txt")
                     dumped = True
                 start_iter += num_steps
 

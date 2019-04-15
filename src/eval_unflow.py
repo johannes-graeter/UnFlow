@@ -16,9 +16,9 @@ def get_rotation(angle, axis=0):
 
 
 def make_transform(r_p_y_ty_tp):
-    yaw = get_rotation(r_p_y_ty_tp[2], axis=1)
     roll = get_rotation(r_p_y_ty_tp[0], axis=2)
     pitch = get_rotation(r_p_y_ty_tp[1], axis=0)
+    yaw = get_rotation(r_p_y_ty_tp[2], axis=1)
 
     rotation = yaw.dot(pitch.dot(roll))
 
@@ -39,6 +39,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description="options for script")
     parser.add_argument("-p", "--path",
+
                         help="Path to folder with textfiles with angles as rotation and trasnlation direction.")
     parser.add_argument("-l", "--lookup", help="Path to file with nunber to kitti sequence and calib")
     parser.add_argument("-o", "--output", help="Output folder.")
