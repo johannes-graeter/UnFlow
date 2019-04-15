@@ -39,7 +39,8 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description="options for script")
     parser.add_argument("-p", "--path",
-
+                        help="Path to folder with textfiles with angles as rotation and trasnlation direction.")
+    parser.add_argument("-p5p", "--path_5_point",
                         help="Path to folder with textfiles with angles as rotation and trasnlation direction.")
     parser.add_argument("-l", "--lookup", help="Path to file with nunber to kitti sequence and calib")
     parser.add_argument("-o", "--output", help="Output folder.")
@@ -71,6 +72,20 @@ def parse_calib_cam(inp):
     return a
 
 
+def scale_result(output, ids, scales):
+    output_scaled = {}
+    for id in ids:
+        output_scaled[id] = {}
+
+    for key, scale_mat in scales.items():
+        for row, motion in output[key].items():
+            cur_motion = np.concatenate((motion[:3, :3], np.transpose(np.array([motion[:3, -1]])) * scale_mat[row]),
+                                        axis=1)
+            output_scaled[key][row] = np.concatenate((cur_motion, np.array([[0., 0., 0., 1.]])))
+
+    return output_scaled
+
+
 def main(args):
     # load calibs
     calib_paths = []
@@ -97,6 +112,10 @@ def main(args):
     for id in ids:
         output[id] = {}
 
+    output_5p = {}
+    for id in ids:
+        output_5p[id] = {}
+
     with open(args.lookup, "r") as f:
         for line in f:
             num, sequ, calib_path = line.strip("\n").split(" ")
@@ -105,6 +124,10 @@ def main(args):
             angles = np.loadtxt(os.path.join(args.path, "{}.txt".format(num)))
             rot, trans = make_transform(angles)
             motion = to_affine(rot, trans)
+
+            motion_5point = np.loadtxt(os.path.join(args.path_5_point, "{}.txt".format(num)))
+            motion_5_point = np.concatenate((np.reshape(motion_5_point, (3, 4)), np.array([[0., 0., 0., 1.]])), axis=0)
+
             # Transform to camera 0 (gray left)
             if "image_2" in sequ:
                 id = 'P2:'
@@ -115,12 +138,14 @@ def main(args):
 
             extr = calibs[calib_path][id]  # extrinsics from cam0 to cam1
             motion_cam_0 = np.linalg.inv(extr).dot(motion.dot(extr))
+            motion_5point_cam0 = np.linalg.inv(extr).dot(motion_5point.dot(extr))
 
             sequ_num = sequ.split("/")
             for id in ids:
                 if id in sequ_num:
                     num = int(sequ_num[-1].strip(".png"))
                     output[id][num] = motion_cam_0
+                    output_5p[id][num] = motion_5point_cam0
 
     # Read groundtruth
     gt = {}
@@ -150,22 +175,19 @@ def main(args):
         scales[key] = np.linalg.norm(deltas[:, :3, -1], axis=1)
 
     # Add scales to output.
-    output_scaled = {}
-    for id in ids:
-        output_scaled[id] = {}
+    output_scaled = scale_result(output, ids, scales)
+    acc = accumulate_output(ids, output_scaled)
 
-    for key, scale_mat in scales.items():
-        for row, motion in output[key].items():
-            cur_motion = np.concatenate((motion[:3, :3], np.transpose(np.array([motion[:3, -1]])) * scale_mat[row]),
-                                        axis=1)
-            output_scaled[key][row] = np.concatenate((cur_motion, np.array([[0., 0., 0., 1.]])))
-
-    acc = accumulate_output(ids, output)
+    output_scaled_5point = scale_result(output_5p, ids, scales)
+    acc_5p = accumulate_output(ids, output_scaled_5point)
     # acc_test = accumulate_output(ids, gt_deltas)
 
     # Dump it.
     for key, data in acc.items():
         np.savetxt(args.output + "/result_{}.txt".format(key), np.array(data))
+
+    for key, data in acc_5p.items():
+        np.savetxt(args.output + "/result_5p_{}.txt".format(key), np.array(data))
 
         # for key, data in acc_test.items():
         #     np.savetxt(args.output + "/test_gt_{}.txt".format(key), np.array(data))
